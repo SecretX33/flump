@@ -1,9 +1,9 @@
 local Flump = CreateFrame("frame")
 
-local OUTPUT = "RAID"		    -- Which channel should the announcements be sent to?
-local MIN_TANK_HP = 55000       -- How much health must a player have to be considered a tank?
+local OUTPUT = "RAID"			-- Which channel should the announcements be sent to?
+local MIN_TANK_HP = 55000		-- How much health must a player have to be considered a tank?
 local MIN_HEALER_MANA = 20000	-- How much mana must a player have to be considered a healer?
-local DIVINE_PLEA = false	    -- Announce when (holy) Paladins cast Divine Plea? (-50% healing)
+local DIVINE_PLEA = true		-- Announce when (holy) Paladins cast Divine Plea? (-50% healing)
 
 local status = "|cff39d7e5Flump: %s|r"
 
@@ -26,11 +26,10 @@ local soulstones = {}
 local ad_heal	 = false
 
 local HEROISM	= UnitFactionGroup("player") == "Horde" and 2825 or 32182	-- Horde = "Bloodlust" / Alliance = "Heroism"
-local REBIRTH 	= GetSpellInfo(20484)						                -- "Rebirth"
-local HOP 	    = GetSpellInfo(1022)						                -- "Hand of Protection"
-local SOULSTONE = GetSpellInfo(20707)						                -- "Soulstone Resurrection"
-local CABLES	= GetSpellInfo(54732)						                -- "Defibrillate
-local MISDIRECTION = GetSpellInfo(34477)                                    -- "MD", set nil to disable this one
+local REBIRTH 	= GetSpellInfo(20484)										-- "Rebirth"
+local HOP 		= GetSpellInfo(1022)										-- "Hand of Protection"
+local SOULSTONE = GetSpellInfo(20707)										-- "Soulstone Resurrection"
+local CABLES	= GetSpellInfo(54732)										-- "Defibrillate
 
 -- Upvalues
 local UnitInRaid, UnitAffectingCombat = UnitInRaid, UnitAffectingCombat
@@ -57,79 +56,75 @@ local port = {
 
 local rituals = {
 	-- Mage
-	[58659] = true,  -- Ritual of Refreshment
+	[58659] = true, -- Ritual of Refreshment
 	-- Warlock
-	[58887] = false, -- Ritual of Souls
-	[698]	= true,  -- Ritual of Summoning
+	[58887] = true, -- Ritual of Souls
+	[698]	= true,	-- Ritual of Summoning
 }
 
--- Combat only announce, require target
 local spells = {
 	-- Paladin
-	[6940] 	= true,	 -- Hand of Sacrifice
-	[20233] = false, -- Lay on Hands (Rank 1) [Fade]
-	[20236] = false, -- Lay on Hands (Rank 2) [Fade]
+	[6940] 	= true,	-- Hand of Sacrifice
+	[20233] = true, -- Lay on Hands (Rank 1) [Fade]
+	[20236] = true, -- Lay on Hands (Rank 2) [Fade]
 	-- Priest
-	[47788] = true,  -- Guardian Spirit
-	[33206] = true,  -- Pain Suppression
+	[47788] = true, -- Guardian Spirit
+	[33206] = true, -- Pain Suppression
 }
 
 local bots = {
 	-- Engineering
-	[22700] = true,  -- Field Repair Bot 74A
-	[44389] = true,  -- Field Repair Bot 110G
-	[67826] = true,  -- Jeeves
-	[54710] = true,  -- MOLL-E
-	[54711] = true,  -- Scrapbot
+	[22700] = true,	-- Field Repair Bot 74A
+	[44389] = true,	-- Field Repair Bot 110G
+	[67826] = true,	-- Jeeves
+	[54710] = true,	-- MOLL-E
+	[54711] = true,	-- Scrapbot
 }
 
 local use = {
 	-- Death Knight
-	[48707] = false, -- Anti-Magic Shell
-	[48792] = false, -- Icebound Fortitude
-	[55233] = false, -- Vampiric Blood
+	[48707] = true,	-- Anti-Magic Shell
+	[48792] = true,	-- Icebound Fortitude
+	[55233] = true,	-- Vampiric Blood
 	-- Druid
-	[22812] = false, -- Barkskin
-	[22842] = false, -- Frenzied Regeneration
-	[61336] = false, -- Survival Instincts
+	[22812] = true,	-- Barkskin
+	[22842] = true,	-- Frenzied Regeneration
+	[61336] = true,	-- Survival Instincts
 	-- Paladin
-	[498] 	= true,  -- Divine Protection
+	[498] 	= true, -- Divine Protection
 	-- Warrior
-	[12975] = false, -- Last Stand [Gain]
-	[12976] = false, -- Last Stand [Fade]
-	[871] 	= true,  -- Shield Wall
+	[12975] = true,	-- Last Stand [Gain]
+	[12976] = true,	-- Last Stand [Fade]
+	[871] 	= true,	-- Shield Wall
 }
 
 local bonus = {
 	-- Death Knight
-	[70654] = false, -- Blood Armor [4P T10]
+	[70654] = true, -- Blood Armor [4P T10]
 	-- Druid
-	[70725] = false, -- Enraged Defense [4P T10]
+	[70725] = true, -- Enraged Defense [4P T10]
 }
 
 local feasts = {
-	[57426] = true,  -- Fish Feast
-	[57301] = false, -- Great Feast
-	[66476] = false, -- Bountiful Feast
+	[57426] = true, -- Fish Feast
+	[57301] = true, -- Great Feast
+	[66476] = true, -- Bountiful Feast
 }
--- Combat only announce, spells that doesn't require target
+
 local special = {
 	-- Paladin
-	[31821] = false, -- Aura Mastery
+	[31821] = true, -- Aura Mastery
 	-- Priest
-	[64843] = true,  -- Divine Hymn
-	[64901] = false, -- Hymn of Hope
-	-- Shaman
-	[16190] = false, -- Mana Tide Totem
+	[64843] = true, -- Divine Hymn
 }
 
 local toys = {
-	[61031] = true,  -- Toy Train Set
+	[61031] = true, -- Toy Train Set
 }
 
 local fails = {
 	-- The Lich King
-	["Necrotic Plague"] = false,
+	["Necrotic Plague"] = true,
 	-- Shambling Horror
 	["Enrage"] = "Shambling Horror",
 }
@@ -168,10 +163,6 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
 
 	if not UnitInRaid(srcName) then return end -- If the caster isn't in the raid group
 
-	if event == "SPELL_CAST_SUCCESS" then
-		
-	end
-			
 	if UnitAffectingCombat(srcName) then -- If the caster is in combat
 	
 		if event == "SPELL_CAST_SUCCESS" then
@@ -237,8 +228,6 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
 			send(bot:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used a [Y] -- Bots
 		elseif rituals[spellID] then
 			send(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
-		elseif spellID == MISDIRECTION then -- Don't want to announce when it fades, so
-			send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- MD
 		end
 		
 	elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
