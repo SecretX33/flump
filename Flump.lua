@@ -25,11 +25,11 @@ local sacrifice  = {}
 local soulstones = {}
 local ad_heal	 = false
 
-local HEROISM	= UnitFactionGroup("player") == "Horde" and 2825 or 32182	-- Horde = "Bloodlust" / Alliance = "Heroism"
-local REBIRTH 	= GetSpellInfo(20484)						                -- "Rebirth"
-local HOP 	    = GetSpellInfo(1022)						                -- "Hand of Protection"
-local SOULSTONE = GetSpellInfo(20707)						                -- "Soulstone Resurrection"
-local CABLES	= GetSpellInfo(54732)						                -- "Defibrillate
+local HEROISM	   = UnitFactionGroup("player") == "Horde" and 2825 or 32182	-- Horde = "Bloodlust" / Alliance = "Heroism"
+local REBIRTH 	   = GetSpellInfo(20484)						                -- "Rebirth"
+local HOP 	       = GetSpellInfo(1022)						                -- "Hand of Protection"
+local SOULSTONE    = GetSpellInfo(20707)						                -- "Soulstone Resurrection"
+local CABLES	   = GetSpellInfo(54732)						                -- "Defibrillate
 local MISDIRECTION = GetSpellInfo(34477)                                    -- "MD", set nil to disable this one
 
 -- Upvalues
