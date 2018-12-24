@@ -29,6 +29,6 @@ What is different from fraggerfox's customized version?
 -----
 To-Do 
 
-1. Make code cleaner
-2. Add a verification to prevent multiple announcements for the same spell
+1. Make code cleaner and easy to switch spell announces
+2. Add a verification to prevent multiple announcements for the same spell (aka multiple people using this addon)
 3. Add more spells, maybe?
