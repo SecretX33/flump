@@ -26,11 +26,12 @@ local soulstones = {}
 local ad_heal	 = false
 
 local HEROISM	   = UnitFactionGroup("player") == "Horde" and 2825 or 32182	-- Horde = "Bloodlust" / Alliance = "Heroism"
-local MISDIRECTION = 34477                                                      -- "MD", set nil to disable this one
+local MISDIRECTION = 34477                                                      -- "MD"
+local RAISE_ALLY   = 61999                                                      -- "Raise Ally"
 local REBIRTH 	   = GetSpellInfo(20484)						                -- "Rebirth"
 local HOP 	       = GetSpellInfo(1022)						                    -- "Hand of Protection"
 local SOULSTONE    = GetSpellInfo(20707)						                -- "Soulstone Resurrection"
-local CABLES	   = GetSpellInfo(54732)						                -- "Defibrillate
+local CABLES	   = GetSpellInfo(54732)						                -- "Defibrillate"
 
 -- Upvalues
 local UnitInRaid, UnitAffectingCombat = UnitInRaid, UnitAffectingCombat
@@ -73,11 +74,10 @@ local spells = {
 	[47788] = true,  -- Guardian Spirit
 	[33206] = true,  -- Pain Suppression
 	-- Hunter (debug only)
-	[53209] = false,  -- Chimera Shot
-	[49050] = false,  -- Aimed Shot
-	[49052] = false,  -- Steady Shot
-	[49001] = false,  -- Serpent Sting
-	
+	[53209] = false, -- Chimera Shot
+	[49050] = false, -- Aimed Shot
+	[49052] = false, -- Steady Shot
+	[49001] = false, -- Serpent Sting
 }
 
 local bots = {
@@ -235,8 +235,10 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
 	if event == "SPELL_CAST_SUCCESS" then
 		if spellID == HEROISM then
 			send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))  -- [X] used [Y] -- Heroism/Bloodlust
-		elseif spellID == MISDIRECTION then                                   -- Don't want to announce when it fades, so
-			send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- MD
+		elseif spellID == MISDIRECTION then
+			send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Misdirection on [Z]
+		elseif spellID == RAISE_ALLY then
+			send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Raise Ally on [Z]
 		elseif bots[spellID] then 
 			send(bot:format(icon(srcName), srcName, GetSpellLink(spellID)))   -- [X] used a [Y] -- Bots
 		elseif rituals[spellID] then
