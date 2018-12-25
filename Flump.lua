@@ -26,11 +26,11 @@ local soulstones = {}
 local ad_heal	 = false
 
 local HEROISM	   = UnitFactionGroup("player") == "Horde" and 2825 or 32182	-- Horde = "Bloodlust" / Alliance = "Heroism"
+local MISDIRECTION = 34477                                                      -- "MD", set nil to disable this one
 local REBIRTH 	   = GetSpellInfo(20484)						                -- "Rebirth"
-local HOP 	       = GetSpellInfo(1022)						                -- "Hand of Protection"
+local HOP 	       = GetSpellInfo(1022)						                    -- "Hand of Protection"
 local SOULSTONE    = GetSpellInfo(20707)						                -- "Soulstone Resurrection"
 local CABLES	   = GetSpellInfo(54732)						                -- "Defibrillate
-local MISDIRECTION = GetSpellInfo(34477)                                    -- "MD", set nil to disable this one
 
 -- Upvalues
 local UnitInRaid, UnitAffectingCombat = UnitInRaid, UnitAffectingCombat
@@ -72,6 +72,12 @@ local spells = {
 	-- Priest
 	[47788] = true,  -- Guardian Spirit
 	[33206] = true,  -- Pain Suppression
+	-- Hunter (debug only)
+	[53209] = false,  -- Chimera Shot
+	[49050] = false,  -- Aimed Shot
+	[49052] = false,  -- Steady Shot
+	[49001] = false,  -- Serpent Sting
+	
 }
 
 local bots = {
@@ -167,7 +173,7 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
 	end
 
 	if not UnitInRaid(srcName) then return end -- If the caster isn't in the raid group
-			
+	
 	if UnitAffectingCombat(srcName) then -- If the caster is in combat
 	
 		if event == "SPELL_CAST_SUCCESS" then
@@ -228,11 +234,11 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
 	
 	if event == "SPELL_CAST_SUCCESS" then
 		if spellID == HEROISM then
-			send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y] -- Heroism/Bloodlust
-		elseif spellID == MISDIRECTION then -- Don't want to announce when it fades, so
+			send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))  -- [X] used [Y] -- Heroism/Bloodlust
+		elseif spellID == MISDIRECTION then                                   -- Don't want to announce when it fades, so
 			send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- MD
 		elseif bots[spellID] then 
-			send(bot:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used a [Y] -- Bots
+			send(bot:format(icon(srcName), srcName, GetSpellLink(spellID)))   -- [X] used a [Y] -- Bots
 		elseif rituals[spellID] then
 			send(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
 		end
