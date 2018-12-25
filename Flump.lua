@@ -1,6 +1,6 @@
 local Flump = CreateFrame("frame")
 
-local OUTPUT
+local OUTPUT          = "RAID"
 local RAID_OUTPUT     = "RAID"    -- Which channel should the announcements be sent to if the player is in a raid group?
 local PARTY_OUTPUT    = "PARTY"   -- Which channel should the announcements be sent to if the player is in a party group?
 local MIN_TANK_HP     = 55000     -- How much health must a player have to be considered a tank?
@@ -136,10 +136,10 @@ local toys = {
 }
 
 local fails = {
+    -- Shambling Horror
+   ["Enrage"]          = "Shambling Horror",
    -- The Lich King
    ["Necrotic Plague"] = false,
-   -- Shambling Horror
-   ["Enrage"] = "Shambling Horror",
 }
 
 Flump:SetScript("OnEvent", function(self, event, ...)
@@ -150,89 +150,103 @@ local function send(msg)
    SendChatMessage(msg, OUTPUT)
 end
 
+--[[local function getOutput(srcName, destName)
+    -- eu / amigo          true AND true OR false
+    -- eu / nil            true AND false OR true
+    -- eu / fora da PT     true AND false OR false
+    if UnitInRaid(srcName) and UnitInRaid(destName) or not destName then
+        OUTPUT = RAID_OUTPUT
+    elseif UnitInParty(srcName) and UnitInParty(destName) or not destName then
+        OUTPUT = PARTY_OUTPUT
+    else
+        OUTPUT = nil
+    end
+end]]--
+
 local function icon(name)
    local n = GetRaidTargetIndex(name)
    return n and format("{rt%d}", n) or ""
 end
 
-function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, srcFlags, destGUID, destName, destFlags, spellID, spellName, school, ...)
 
+function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, srcFlags, destGUID, destName, destFlags, spellID, spellName, school, ...)
+    --getOutput(srcName, destName)
+    --if not OUTPUT return end
    -- [X] died with a Soulstone!
-   if UnitInRaid(destName) then -- If the target isn't in the raid group
-      if spellName == SOULSTONE and event == "SPELL_AURA_REMOVED" then
-         if not soulstones[destName] then soulstones[destName] = {} end
-         soulstones[destName].time = GetTime()
-      elseif spellID == 27827 and event == "SPELL_AURA_APPLIED" then
-         soulstones[destName] = {}
-         soulstones[destName].SoR = true -- Workaround for Spirit of Redemption issue
-      elseif event == "UNIT_DIED" and soulstones[destName] and not UnitIsFeignDeath(destName) then
-         if not soulstones[destName].SoR and (GetTime() - soulstones[destName].time) < 2 then
-            send(ss:format(destName, GetSpellLink(6203)))
-            SendChatMessage(ss:format(destName, GetSpellLink(6203)), "RAID_WARNING")
-         end
-         soulstones[destName] = nil
-      end
-   end
+    if UnitInRaid(destName) then -- If the target isn't in the raid group
+        if spellName == SOULSTONE and event == "SPELL_AURA_REMOVED" then
+            if not soulstones[destName] then soulstones[destName] = {} end
+            soulstones[destName].time = GetTime()
+        elseif spellID == 27827 and event == "SPELL_AURA_APPLIED" then
+            soulstones[destName] = {}
+            soulstones[destName].SoR = true -- Workaround for Spirit of Redemption issue
+        elseif event == "UNIT_DIED" and soulstones[destName] and not UnitIsFeignDeath(destName) then
+            if not soulstones[destName].SoR and (GetTime() - soulstones[destName].time) < 2 then
+                send(ss:format(destName, GetSpellLink(6203)))
+                SendChatMessage(ss:format(destName, GetSpellLink(6203)), "RAID_WARNING")
+            end
+            soulstones[destName] = nil
+        end
+    end
 
    if not UnitInRaid(srcName) then return end -- If the caster isn't in the raid group
    
-   if UnitAffectingCombat(srcName) then -- If the caster is in combat
+    if UnitAffectingCombat(srcName) then -- If the caster is in combat
    
-      if event == "SPELL_CAST_SUCCESS" then
-         if spells[spellID] then
-            send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z]
-         elseif spellID == 19752 then -- Don't want to announce when it fades, so
-            send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
-         elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
-            send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y]
-         elseif spellID == 64205 then  -- Workaround for Divine Sacrifice issue
-            send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Sacrifice
-            sacrifice[srcGUID] = true
-         elseif special[spellID] then -- Workaround for spells which aren't tanking spells
-            send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Aura Mastery
-         elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
-            send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Plea
-         end
-         
-      elseif event == "SPELL_AURA_APPLIED" then -- [X] cast [Y] on [Z]
-         if spellID == 20233 or spellID == 20236 then -- Improved Lay on Hands (Rank 1/Rank 2)
-            send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
-         elseif bonus[spellID] then
-            send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Z] (bonus)
-         elseif spellID == 66233 then
-            if not ad_heal then -- If the Ardent Defender heal message hasn't been sent already
-               send(ad:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X]'s [Y] consumed
+        if event == "SPELL_CAST_SUCCESS" then
+            if spells[spellID] then
+                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z]
+            elseif spellID == 19752 then -- Don't want to announce when it fades, so
+                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
+            elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
+                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y]
+            elseif spellID == 64205 then  -- Workaround for Divine Sacrifice issue
+                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Sacrifice
+                sacrifice[srcGUID] = true
+            elseif special[spellID] then -- Workaround for spells which aren't tanking spells
+                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Aura Mastery
+            elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
+                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Plea
             end
-            ad_heal = false
-         elseif spellName == HOP and UnitHealthMax(destName) >= MIN_TANK_HP then
-            send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast Hand of Protection on [Z]
-         end
-      
-      elseif event == "SPELL_HEAL" then
-         if spellID == 48153 or spellID == 66235 then -- Guardian Spirit / Ardent Defender
-            local amount = ...
-            ad_heal = true
-            send(gs:format(icon(srcName), srcName, GetSpellLink(spellID), amount)) -- [X]'s [Y] consumed: [Z] heal
-         end
          
-      elseif event == "SPELL_AURA_REMOVED" then
-         if spells[spellID] or (spellName == HOP and UnitHealthMax(destName) >= MIN_TANK_HP) then
-            send(fade:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X]'s [Y] faded from [Z]
-         elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
-            send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y]
-         elseif bonus[spellID] then
-            send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y] (bonus)
-         elseif spellID == 64205 and sacrifice[destGUID] then
-            send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Sacrifice faded from [Y]
-            sacrifice[destGUID] = nil
-         elseif special[spellID] then -- Workaround for spells which aren't tanking spells
-            send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Aura Mastery faded from [X]
-         elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
-            send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Plea faded from [X]
-         end
-      end
+        elseif event == "SPELL_AURA_APPLIED" then -- [X] cast [Y] on [Z]
+            if spellID == 20233 or spellID == 20236 then -- Improved Lay on Hands (Rank 1/Rank 2)
+                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
+            elseif bonus[spellID] then
+                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Z] (bonus)
+            elseif spellID == 66233 then
+                if not ad_heal then -- If the Ardent Defender heal message hasn't been sent already
+                send(ad:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X]'s [Y] consumed
+                end
+                ad_heal = false
+            elseif spellName == HOP and UnitHealthMax(destName) >= MIN_TANK_HP then
+                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast Hand of Protection on [Z]
+            end
       
-   end
+        elseif event == "SPELL_HEAL" then
+            if spellID == 48153 or spellID == 66235 then -- Guardian Spirit / Ardent Defender
+                local amount = ...
+                ad_heal = true
+                send(gs:format(icon(srcName), srcName, GetSpellLink(spellID), amount)) -- [X]'s [Y] consumed: [Z] heal
+            end
+         
+        elseif event == "SPELL_AURA_REMOVED" then
+            if spells[spellID] or (spellName == HOP and UnitHealthMax(destName) >= MIN_TANK_HP) then
+                send(fade:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X]'s [Y] faded from [Z]
+            elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
+                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y]
+            elseif bonus[spellID] then
+                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y] (bonus)
+            elseif spellID == 64205 and sacrifice[destGUID] then
+                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Sacrifice faded from [Y]
+                sacrifice[destGUID] = nil
+            elseif special[spellID] then -- Workaround for spells which aren't tanking spells
+                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Aura Mastery faded from [X]
+            elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
+                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Plea faded from [X]
+            end
+        end    
+    end
    
    if event == "SPELL_CAST_SUCCESS" then
       if spellID == HEROISM then
@@ -247,13 +261,15 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
          send(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
       end
       
-   elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
-      if spellName == SOULSTONE then
-         local _, class = UnitClass(srcName)
-         if class == "WARLOCK" then -- Workaround for Spirit of Redemption issue
-            send(cast:format(icon(srcName), srcName, GetSpellLink(6203), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Soulstone
-         end
-      end
+    elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
+        if spells[spellID] and spellID == 6940 then
+                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
+        elseif spellName == SOULSTONE then
+            local _, class = UnitClass(srcName)
+            if class == "WARLOCK" then -- Workaround for Spirit of Redemption issue
+                send(cast:format(icon(srcName), srcName, GetSpellLink(6203), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Soulstone
+            end
+        end
       
    elseif event == "SPELL_CREATE" then
       if port[spellID] then
