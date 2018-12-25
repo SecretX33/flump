@@ -9,7 +9,7 @@ The original version of Flump can be found here http://wow.curseforge.com/addons
 and found this addon to be quite useful and lightweight, but there were a few short comings and since the project
 was marked as abandoned I made a fork of it from the v3.3.5 release in curseforge for personal purposes.
 
-(secretx33) Same as fraggerfox, I found this addon quite lightweight, simple and easy to edit, but I wanted to improve it, that's why I am forking his customized version to improve it even more and add more features. The code itself need to be cleaned, it's actually working, but it's also too messy, it's hard to activate and deactivate spell announces.
+(secretx33) Same as fraggerfox, I found this addon quite lightweight, simple and easy to edit, but I wanted to improve it, that's why I am forking his customized version to improve it even more and add more features. The code itself need to be cleaned, it's actually working, but it's also too messy and too hard to switch on/off spell announces.
 
 Note: All credits go to the original author of Flump.
 
@@ -29,6 +29,6 @@ What is different from fraggerfox's customized version?
 -----
 To-Do 
 
-1. Make code cleaner
-2. Add a verification to prevent multiple announcements for the same spell
+1. Make code cleaner and easy to switch spell announces
+2. Add a verification to prevent multiple announcements for the same spell (aka multiple people using this addon)
 3. Add more spells, maybe?
