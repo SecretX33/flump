@@ -167,10 +167,6 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
 	end
 
 	if not UnitInRaid(srcName) then return end -- If the caster isn't in the raid group
-
-	if event == "SPELL_CAST_SUCCESS" then
-		
-	end
 			
 	if UnitAffectingCombat(srcName) then -- If the caster is in combat
 	
@@ -233,12 +229,12 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
 	if event == "SPELL_CAST_SUCCESS" then
 		if spellID == HEROISM then
 			send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y] -- Heroism/Bloodlust
+		elseif spellID == MISDIRECTION then -- Don't want to announce when it fades, so
+			send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- MD
 		elseif bots[spellID] then 
 			send(bot:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used a [Y] -- Bots
 		elseif rituals[spellID] then
 			send(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
-		elseif spellID == MISDIRECTION then -- Don't want to announce when it fades, so
-			send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- MD
 		end
 		
 	elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
