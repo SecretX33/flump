@@ -262,9 +262,9 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
       end
       
     elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
-        if spells[spellID] and spellID == 6940 then
+        --[[if spells[spellID] and spellID == 6940 then
                 send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
-        elseif spellName == SOULSTONE then
+        else]]if spellName == SOULSTONE then
             local _, class = UnitClass(srcName)
             if class == "WARLOCK" then -- Workaround for Spirit of Redemption issue
                 send(cast:format(icon(srcName), srcName, GetSpellLink(6203), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Soulstone
