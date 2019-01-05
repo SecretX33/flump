@@ -29,6 +29,7 @@ local ad_heal    = false
 
 local HEROISM      = UnitFactionGroup("player") == "Horde" and 2825 or 32182   -- Horde = "Bloodlust" / Alliance = "Heroism"
 local MISDIRECTION = 34477                                                     -- "MD"
+local TRICKS       = 57934                                                     -- "Tricks"                                           
 local RAISE_ALLY   = 61999                                                     -- "Raise Ally"
 local REBIRTH      = GetSpellInfo(20484)                                       -- "Rebirth"
 local HOP          = GetSpellInfo(1022)                                        -- "Hand of Protection"
@@ -251,7 +252,7 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
    if event == "SPELL_CAST_SUCCESS" then
       if spellID == HEROISM then
          send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))  -- [X] used [Y] -- Heroism/Bloodlust
-      elseif spellID == MISDIRECTION then
+      elseif spellID == MISDIRECTION or spellID == TRICKS then
          send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Misdirection on [Z]
       elseif spellID == RAISE_ALLY then
          send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Raise Ally on [Z]
