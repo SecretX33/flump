@@ -28,8 +28,8 @@ local soulstones = {}
 local ad_heal    = false
 
 local HEROISM      = UnitFactionGroup("player") == "Horde" and 2825 or 32182   -- Horde = "Bloodlust" / Alliance = "Heroism"
-local MISDIRECTION = 0                                                         -- "MD"           34477
-local TRICKS       = 0                                                         -- "Tricks"       57934                                        
+local MISDIRECTION = 34477                                                     -- "MD"
+local TRICKS       = 57934                                                     -- "Tricks"                                           
 local RAISE_ALLY   = 61999                                                     -- "Raise Ally"
 local REBIRTH      = GetSpellInfo(20484)                                       -- "Rebirth"
 local HOP          = GetSpellInfo(1022)                                        -- "Hand of Protection"
@@ -70,7 +70,7 @@ local rituals = {
 -- Combat only announce, require target
 local spells = {
    -- Paladin
-   [6940]  = false,  -- Hand of Sacrifice
+   [6940]  = true,  -- Hand of Sacrifice
    [20233] = false, -- Lay on Hands (Rank 1) [Fade]
    [20236] = false, -- Lay on Hands (Rank 2) [Fade]
    -- Priest
@@ -126,10 +126,10 @@ local special = {
    -- Paladin
    [31821] = false, -- Aura Mastery
    -- Priest
-   [64843] = false,  -- Divine Hymn
+   [64843] = true,  -- Divine Hymn
    [64901] = false, -- Hymn of Hope
    -- Shaman
-   [16190] = true, -- Mana Tide Totem
+   [16190] = false, -- Mana Tide Totem
 }
 
 local toys = {
@@ -201,9 +201,9 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
                 send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
             elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
                 send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y]
-            --[[elseif spellID == 64205 then  -- Workaround for Divine Sacrifice issue
+            elseif spellID == 64205 then  -- Workaround for Divine Sacrifice issue
                 send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Sacrifice
-                sacrifice[srcGUID] = true]]--
+                sacrifice[srcGUID] = true
             elseif special[spellID] then -- Workaround for spells which aren't tanking spells
                 send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Aura Mastery
             elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
@@ -238,9 +238,9 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
                 send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y]
             elseif bonus[spellID] then
                 send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y] (bonus)
-            --[[elseif spellID == 64205 and sacrifice[destGUID] then
+            elseif spellID == 64205 and sacrifice[destGUID] then
                 send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Sacrifice faded from [Y]
-                sacrifice[destGUID] = nil]]--
+                sacrifice[destGUID] = nil
             elseif special[spellID] then -- Workaround for spells which aren't tanking spells
                 send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Aura Mastery faded from [X]
             elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
