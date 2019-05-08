@@ -28,7 +28,7 @@ local soulstones = {}
 local ad_heal    = false
 
 local HEROISM      = UnitFactionGroup("player") == "Horde" and 2825 or 32182   -- Horde = "Bloodlust" / Alliance = "Heroism"
-local MISDIRECTION = 0                                                         -- "MD"           34477
+local MISDIRECTION = 34477                                                         -- "MD"           34477
 local TRICKS       = 0                                                         -- "Tricks"       57934                                        
 local RAISE_ALLY   = 61999                                                     -- "Raise Ally"
 local REBIRTH      = GetSpellInfo(20484)                                       -- "Rebirth"
