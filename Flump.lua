@@ -28,7 +28,7 @@ local soulstones = {}
 local ad_heal    = false
 
 local HEROISM      = UnitFactionGroup("player") == "Horde" and 2825 or 32182   -- Horde = "Bloodlust" / Alliance = "Heroism"
-local MISDIRECTION = 34477                                                         -- "MD"           34477
+local MISDIRECTION = 34477                                                     -- "MD"           34477
 local TRICKS       = 0                                                         -- "Tricks"       57934                                        
 local RAISE_ALLY   = 61999                                                     -- "Raise Ally"
 local REBIRTH      = GetSpellInfo(20484)                                       -- "Rebirth"
@@ -128,10 +128,10 @@ local special = {
    -- Paladin
    [31821] = false, -- Aura Mastery
    -- Priest
-   [64843] = false,  -- Divine Hymn
+   [64843] = false, -- Divine Hymn
    [64901] = false, -- Hymn of Hope
    -- Shaman
-   [16190] = true, -- Mana Tide Totem
+   [16190] = true,  -- Mana Tide Totem
 }
 
 local toys = {
@@ -251,18 +251,18 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
         end    
     end
    
-   if event == "SPELL_CAST_SUCCESS" then
+    if event == "SPELL_CAST_SUCCESS" then
       if spellID == HEROISM then
          send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))  -- [X] used [Y] -- Heroism/Bloodlust
       elseif spellID == MISDIRECTION or spellID == TRICKS then
          send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Misdirection on [Z]
-      elseif spellID == RAISE_ALLY then
+	  elseif spellID == RAISE_ALLY then
          send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Raise Ally on [Z]
       elseif bots[spellID] then 
          send(bot:format(icon(srcName), srcName, GetSpellLink(spellID)))   -- [X] used a [Y] -- Bots
       elseif rituals[spellID] then
          send(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
-      end
+    end
       
     elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
         --[[if spells[spellID] and spellID == 6940 then
