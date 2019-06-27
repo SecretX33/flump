@@ -69,8 +69,10 @@ local rituals = {
 
 -- Combat only announce, require target
 local spells = {
+   -- Death Knight
+   [49016] = true,  -- Hysteria
    -- Paladin
-   [6940]  = false,  -- Hand of Sacrifice
+   [6940]  = false, -- Hand of Sacrifice
    [20233] = false, -- Lay on Hands (Rank 1) [Fade]
    [20236] = false, -- Lay on Hands (Rank 2) [Fade]
    -- Priest
