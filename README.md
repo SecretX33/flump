@@ -26,6 +26,7 @@ What is different from fraggerfox's customized version?
 * I've changed back from "SAY" to "RAID" because using SAY within a raid is bae
 * Added Hunter's Misdirection ability to the list of spells available
 * Added DK's Raise Ally ability to the list of spells available
+* Added DK's Hysteria ability to the list of spells available
 * Added Rogue's Tricks of the Trade to the list of spells avaiable
 
 -----
