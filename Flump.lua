@@ -7,6 +7,7 @@ local MIN_TANK_HP     = 55000     -- How much health must a player have to be co
 local MIN_HEALER_MANA = 20000     -- How much mana must a player have to be considered a healer?
 local DIVINE_PLEA     = false     -- Announce when (holy) Paladins cast Divine Plea? (-50% healing)
 
+local debug  = false
 local status = "|cff39d7e5Flump: %s|r"
 
 local bot    = "%s%s used a %s!"
@@ -23,21 +24,25 @@ local create = "%s%s is creating a %s!"
 local dispel = "%s%s's %s failed to dispel %s%s's %s!"
 local ss     = "%s died with a %s!"
 
-local sacrifice  = {}
-local soulstones = {}
-local ad_heal    = false
+local sacrifice   = {}
+local soulstones  = {}
+local ad_heal     = false
+local instanceType
+local priority
+local topPriority = true
 
 local HEROISM      = UnitFactionGroup("player") == "Horde" and 2825 or 32182   -- Horde = "Bloodlust" / Alliance = "Heroism"
 local MISDIRECTION = 34477                                                     -- "MD"           34477
-local TRICKS       = 0                                                         -- "Tricks"       57934                                        
+local TRICKS       = 57934                                                     -- "Tricks"       57934                                        
 local RAISE_ALLY   = 61999                                                     -- "Raise Ally"
+local HOLY_WRATH   = 48817                                                     -- "Holy Wrath"
 local REBIRTH      = GetSpellInfo(20484)                                       -- "Rebirth"
 local HOP          = GetSpellInfo(1022)                                        -- "Hand of Protection"
 local SOULSTONE    = GetSpellInfo(20707)                                       -- "Soulstone Resurrection"
 local CABLES       = GetSpellInfo(54732)                                       -- "Defibrillate"
 
 -- Upvalues
-local UnitInRaid, UnitAffectingCombat = UnitInRaid, UnitAffectingCombat
+local UnitInBattleground, UnitInRaid, UnitAffectingCombat = UnitInBattleground, UnitInRaid, UnitAffectingCombat
 local UnitHealthMax, UnitManaMax = UnitHealthMax, UnitManaMax
 local GetSpellLink, UnitAffectingCombat, format = GetSpellLink, UnitAffectingCombat, string.format
 
@@ -70,7 +75,7 @@ local rituals = {
 -- Combat only announce, require target
 local spells = {
    -- Death Knight
-   [49016] = true,  -- Hysteria
+   [49016] = false, -- Hysteria
    -- Paladin
    [6940]  = false, -- Hand of Sacrifice
    [20233] = false, -- Lay on Hands (Rank 1) [Fade]
@@ -83,6 +88,7 @@ local spells = {
    [49050] = false, -- Aimed Shot
    [49052] = false, -- Steady Shot
    [49001] = false, -- Serpent Sting
+ 
 }
 
 local bots = {
@@ -150,8 +156,13 @@ Flump:SetScript("OnEvent", function(self, event, ...)
 end)
 
 local function send(msg)
-   SendChatMessage(msg, OUTPUT)
+   if(msg~=nil) then SendChatMessage(msg, OUTPUT) end
 end
+
+local function debugSend(msg)
+   if(msg~=nil) then print("|cff39d7e5Flump:|r " .. msg) end
+end
+
 
 --[[local function getOutput(srcName, destName)
     -- eu / amigo          true AND true OR false
@@ -197,7 +208,9 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
     if UnitAffectingCombat(srcName) then -- If the caster is in combat
    
         if event == "SPELL_CAST_SUCCESS" then
-            if spells[spellID] then
+            if spellID == HOLY_WRATH then
+                 send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))
+            elseif spells[spellID] then
                 send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z]
             elseif spellID == 19752 then -- Don't want to announce when it fades, so
                 send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
@@ -209,7 +222,7 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
             elseif special[spellID] then -- Workaround for spells which aren't tanking spells
                 send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Aura Mastery
             elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
-                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Plea
+                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Plea            
             end
          
         elseif event == "SPELL_AURA_APPLIED" then -- [X] cast [Y] on [Z]
@@ -300,34 +313,119 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
          send(dispel:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName, GetSpellLink(extraID))) -- [W]'s [X] failed to dispel [Y]'s [Z]
       end
    end
-   
+end
+
+local function checkIfAddonShouldBeEnabled()
+   local playerIsInRaidGroup = (not UnitInBattleground("player") and UnitInRaid("player"))
+   if debug then
+      if not topPriority then debugSend("You are not the top priority. :(")
+      else debugSend("You are the top priority! ;)") end
+   end
+
+   if not Flump.db.enabled or (not playerIsInRaidGroup and not debug) then
+      Flump:UnregisterEvent("CHAT_MSG_ADDON")
+      Flump:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+      Flump:UnregisterEvent("PLAYER_REGEN_DISABLED")
+      Flump:UnregisterEvent("RAID_ROSTER_UPDATE")
+   else
+      if playerIsInRaidGroup then Flump:RegisterEvent("RAID_ROSTER_UPDATE")
+      else Flump:UnregisterEvent("RAID_ROSTER_UPDATE") end
+
+      if (instanceType == "raid" and topPriority) or debug then
+         --if debug then debugSend("Addon is on because debug mode is on") end
+         Flump:RegisterEvent("CHAT_MSG_ADDON")
+         Flump:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+         Flump:RegisterEvent("PLAYER_REGEN_DISABLED")
+      -- player is not top priority or is not inside the raid
+      elseif not topPriority or not instanceType == "raid" then
+         Flump:RegisterEvent("CHAT_MSG_ADDON")
+         Flump:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+         Flump:RegisterEvent("PLAYER_REGEN_DISABLED")
+      end
+   end
+end
+
+local function GetPartyType()
+   if UnitInBattleground("player") then
+      return "BATTLEGROUND"
+   elseif UnitInRaid("player") then
+      return "RAID"
+   elseif UnitInParty("player") then
+      return "PARTY"
+   else
+      return nil
+   end
+end
+
+local function sendAddonMessage()
+   local channel = GetPartyType()
+   if not channel then return end
+   SendAddonMessage("Flump", tostring(priority), channel)
+end
+
+
+function Flump:CHAT_MSG_ADDON(addon, msg, _, sender)
+   if addon ~= "Flump" or sender == UnitName("player") then return end
+
+   local friendPriority = tonumber(msg)
+   if debug then debugSend((sender or "") .. " sent you his priority, your are " .. priority .. " and his is " .. friendPriority) end
+
+   if priority > friendPriority then
+      topPriority = true
+      checkIfAddonShouldBeEnabled()
+      sendAddonMessage()
+   elseif friendPriority > priority then
+      topPriority = false
+      checkIfAddonShouldBeEnabled()
+   else
+      priority = math.random(1000000)
+      sendAddonMessage()
+   end
+end
+
+function Flump:PLAYER_REGEN_DISABLED()
+   sendAddonMessage()
+end
+
+function Flump:RAID_ROSTER_UPDATE()
+   if debug then debugSend("raid roaster updated.") end
+   topPriority = true
+   checkIfAddonShouldBeEnabled()
+   sendAddonMessage()
 end
 
 function Flump:PLAYER_ENTERING_WORLD()
-   local _, instance = IsInInstance()
-   if instance == "raid" and self.db.enabled then
-      self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-   else
-      self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-   end
+   instanceType = select(2,IsInInstance())
+   checkIfAddonShouldBeEnabled()
+   sendAddonMessage()
 end
 
 function Flump:ADDON_LOADED(addon)
    if addon ~= "Flump" then return end
+   priority = math.random(1000000)
    FlumpDB = FlumpDB or { enabled = true }
    self.db = FlumpDB
+   debug = self.db.debug or debug
    SLASH_FLUMP1 = "/flump"
-   SlashCmdList.FLUMP = function()
-      if self.db.enabled then
+   SlashCmdList.FLUMP = function(typed)
+      local cmd = string.match(typed,"^(%w+)") -- Gets the first word the user has typed
+      if cmd~=nil then cmd = cmd:lower() end   -- And makes it lower case
+      if(cmd=="debug") then
+         debug = not debug
+         self.db.debug = debug
+         debugSend("debug mode turned " .. (debug and "|cff00ff00on|r" or "|cffff0000off|r"))
+         checkIfAddonShouldBeEnabled()
+      elseif self.db.enabled then
          self.db.enabled = false
-         self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+         checkIfAddonShouldBeEnabled()
          print(status:format("|cffff0000off|r"))
       else
          self.db.enabled = true
-         self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+         checkIfAddonShouldBeEnabled()
          print(status:format("|cff00ff00on|r"))
       end
    end
+   if debug then debugSend("remember that debug mode is |cff00ff00ON|r.") end
    self:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
 
