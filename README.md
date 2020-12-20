@@ -1,9 +1,11 @@
 flump
 =====
 
+Download the lastest version [here](https://github.com/SecretX33/flump/releases/latest/download/Flump.zip).
+
 A customized version of Flump for World of Warcraft 3.3.5a
 
-The original version of Flump can be found here http://wow.curseforge.com/addons/flump/
+The original version of Flump can be found [here](http://wow.curseforge.com/addons/flump).
 
 (fraggerfox) I stumbled upon this addon when looking for a simple addon to detect the activation of spells like Aura Mastery
 and found this addon to be quite useful and lightweight, but there were a few short comings and since the project
