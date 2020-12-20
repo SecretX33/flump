@@ -7,8 +7,9 @@ local MIN_TANK_HP     = 55000     -- How much health must a player have to be co
 local MIN_HEALER_MANA = 20000     -- How much mana must a player have to be considered a healer?
 local DIVINE_PLEA     = false     -- Announce when (holy) Paladins cast Divine Plea? (-50% healing)
 
-local debug  = false
-local status = "|cff39d7e5Flump: %s|r"
+local debug    = false
+local alwayson = false
+local status   = "|cff39d7e5Flump: %s|r"
 
 local bot    = "%s%s used a %s!"
 local used   = "%s%s used %s!"
@@ -40,6 +41,8 @@ local REBIRTH      = GetSpellInfo(20484)                                       -
 local HOP          = GetSpellInfo(1022)                                        -- "Hand of Protection"
 local SOULSTONE    = GetSpellInfo(20707)                                       -- "Soulstone Resurrection"
 local CABLES       = GetSpellInfo(54732)                                       -- "Defibrillate"
+
+local addonVersion
 
 -- Upvalues
 local UnitInBattleground, UnitInRaid, UnitAffectingCombat = UnitInBattleground, UnitInRaid, UnitAffectingCombat
@@ -80,6 +83,7 @@ local spells = {
    [6940]  = false, -- Hand of Sacrifice
    [20233] = false, -- Lay on Hands (Rank 1) [Fade]
    [20236] = false, -- Lay on Hands (Rank 2) [Fade]
+   [48785] = false, -- Flash Heal (for debug)
    -- Priest
    [47788] = true,  -- Guardian Spirit
    [33206] = true,  -- Pain Suppression
@@ -88,7 +92,6 @@ local spells = {
    [49050] = false, -- Aimed Shot
    [49052] = false, -- Steady Shot
    [49001] = false, -- Serpent Sting
- 
 }
 
 local bots = {
@@ -317,12 +320,12 @@ end
 
 local function checkIfAddonShouldBeEnabled()
    local playerIsInRaidGroup = (not UnitInBattleground("player") and UnitInRaid("player"))
-   if debug then
+   if debug and Flump.db.enabled then
       if not topPriority then debugSend("You are not the top priority. :(")
       else debugSend("You are the top priority! ;)") end
    end
 
-   if not Flump.db.enabled or (not playerIsInRaidGroup and not debug) then
+   if not Flump.db.enabled or (not playerIsInRaidGroup and not alwayson) then
       Flump:UnregisterEvent("CHAT_MSG_ADDON")
       Flump:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
       Flump:UnregisterEvent("PLAYER_REGEN_DISABLED")
@@ -331,7 +334,7 @@ local function checkIfAddonShouldBeEnabled()
       if playerIsInRaidGroup then Flump:RegisterEvent("RAID_ROSTER_UPDATE")
       else Flump:UnregisterEvent("RAID_ROSTER_UPDATE") end
 
-      if (instanceType == "raid" and topPriority) or debug then
+      if (instanceType == "raid" and topPriority) or alwayson then
          --if debug then debugSend("Addon is on because debug mode is on") end
          Flump:RegisterEvent("CHAT_MSG_ADDON")
          Flump:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
@@ -360,9 +363,15 @@ end
 local function sendAddonMessage()
    local channel = GetPartyType()
    if not channel then return end
-   SendAddonMessage("Flump", tostring(priority), channel)
+   local prio
+   -- Player needs to have the addon on and to be inside the raid to be able to send messages
+   if Flump.db.enabled and instanceType=="raid" then
+      prio = tostring(priority)
+   else
+      prio = "0"
+   end
+   SendAddonMessage("Flump", prio, channel)
 end
-
 
 function Flump:CHAT_MSG_ADDON(addon, msg, _, sender)
    if addon ~= "Flump" or sender == UnitName("player") then return end
@@ -397,35 +406,52 @@ end
 function Flump:PLAYER_ENTERING_WORLD()
    instanceType = select(2,IsInInstance())
    checkIfAddonShouldBeEnabled()
-   sendAddonMessage()
+   if (not UnitInBattleground("player") and UnitInRaid("player")) then sendAddonMessage() end
+end
+
+local function slashCommand(typed)
+   local cmd = string.match(typed,"^(%w+)") -- Gets the first word the user has typed
+   if cmd~=nil then cmd = cmd:lower() end   -- And makes it lower case
+   if(cmd=="debug") then
+      debug = not debug
+      Flump.db.debug = debug
+      debugSend("debug mode turned " .. (debug and "|cff00ff00on|r" or "|cffff0000off|r"))
+      checkIfAddonShouldBeEnabled()
+   elseif (cmd=="alwayson") then
+      alwayson = not alwayson
+      Flump.db.alwayson = alwayson
+      debugSend("alwayson mode turned " .. (alwayson and "|cff00ff00on|r" or "|cffff0000off|r"))
+   elseif (cmd=="ver" or cmd=="version") then
+      if addonVersion~=nil then debugSend("version " .. addonVersion) end
+   elseif Flump.db.enabled then
+      Flump.db.enabled = false
+      checkIfAddonShouldBeEnabled()
+      sendAddonMessage()
+      print(status:format("|cffff0000off|r"))
+   else
+      Flump.db.enabled = true
+      topPriority = true
+      sendAddonMessage()
+      checkIfAddonShouldBeEnabled()
+      print(status:format("|cff00ff00on|r"))
+   end
 end
 
 function Flump:ADDON_LOADED(addon)
    if addon ~= "Flump" then return end
    priority = math.random(1000000)
+
    FlumpDB = FlumpDB or { enabled = true }
    self.db = FlumpDB
    debug = self.db.debug or debug
+   alwayson = self.db.alwayson or alwayson
+   if debug then spells[48785] = true end
+   addonVersion = GetAddOnMetadata("Flump", "Version")
+
    SLASH_FLUMP1 = "/flump"
-   SlashCmdList.FLUMP = function(typed)
-      local cmd = string.match(typed,"^(%w+)") -- Gets the first word the user has typed
-      if cmd~=nil then cmd = cmd:lower() end   -- And makes it lower case
-      if(cmd=="debug") then
-         debug = not debug
-         self.db.debug = debug
-         debugSend("debug mode turned " .. (debug and "|cff00ff00on|r" or "|cffff0000off|r"))
-         checkIfAddonShouldBeEnabled()
-      elseif self.db.enabled then
-         self.db.enabled = false
-         checkIfAddonShouldBeEnabled()
-         print(status:format("|cffff0000off|r"))
-      else
-         self.db.enabled = true
-         checkIfAddonShouldBeEnabled()
-         print(status:format("|cff00ff00on|r"))
-      end
-   end
+   SlashCmdList.FLUMP = function(cmd) slashCommand(cmd) end
    if debug then debugSend("remember that debug mode is |cff00ff00ON|r.") end
+   if alwayson then debugSend("remember that alwayson mode is |cff00ff00ON|r.") end
    self:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
 
