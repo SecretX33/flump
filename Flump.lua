@@ -30,17 +30,20 @@ local soulstones  = {}
 local ad_heal     = false
 local instanceType
 local priority
+local lastSentPriority
 local topPriority = true
+local playerIsUnderMetamorphosis = false
 
-local HEROISM      = UnitFactionGroup("player") == "Horde" and 2825 or 32182   -- Horde = "Bloodlust" / Alliance = "Heroism"
-local MISDIRECTION = 34477                                                     -- "MD"           34477
-local TRICKS       = 57934                                                     -- "Tricks"       57934                                        
-local RAISE_ALLY   = 61999                                                     -- "Raise Ally"
-local HOLY_WRATH   = 48817                                                     -- "Holy Wrath"
-local REBIRTH      = GetSpellInfo(20484)                                       -- "Rebirth"
-local HOP          = GetSpellInfo(1022)                                        -- "Hand of Protection"
-local SOULSTONE    = GetSpellInfo(20707)                                       -- "Soulstone Resurrection"
-local CABLES       = GetSpellInfo(54732)                                       -- "Defibrillate"
+local HEROISM       = UnitFactionGroup("player") == "Horde" and 2825 or 32182   -- Horde = "Bloodlust" / Alliance = "Heroism"
+local MISDIRECTION  = 34477                                                     -- "MD"           34477
+local TRICKS        = 57934                                                     -- "Tricks"       57934
+local RAISE_ALLY    = 61999                                                     -- "Raise Ally"
+local HOLY_WRATH    = 48817                                                     -- "Holy Wrath"
+local METAMORPHOSIS = 47241                                                     -- "Metamorphosis"
+local REBIRTH       = GetSpellInfo(20484)                                       -- "Rebirth"
+local HOP           = GetSpellInfo(1022)                                        -- "Hand of Protection"
+local SOULSTONE     = GetSpellInfo(20707)                                       -- "Soulstone Resurrection"
+local CABLES        = GetSpellInfo(54732)                                       -- "Defibrillate"
 
 local addonVersion
 
@@ -166,6 +169,27 @@ local function debugSend(msg)
    if(msg~=nil) then print("|cff39d7e5Flump:|r " .. msg) end
 end
 
+-- Remove spaces on start and end of string
+local is_int = function(n)
+   return (type(n) == "number") and (math.floor(n) == n)
+end
+
+local function trim(s)
+   return string.match(s,'^()%s*$') and '' or string.match(s,'^%s*(.*%S)')
+end
+
+local function removeWords(myString, numberOfWords)
+   if (myString~=nil and numberOfWords~=nil) then
+      if is_int(numberOfWords) then
+         for i=1, numberOfWords do
+            myString = string.gsub(myString,"^(%s*%a+)","",1)
+         end
+         return trim(myString)
+      else send("numberOfWords arg came, it's not nil BUT it's also NOT an integer, report this, type = " .. tostring(type(numberOfWords))) end
+   end
+   return ""
+end
+-- end of [string utils]
 
 --[[local function getOutput(srcName, destName)
     -- eu / amigo          true AND true OR false
@@ -185,48 +209,136 @@ local function icon(name)
    return n and format("{rt%d}", n) or ""
 end
 
+local function GetPartyType()
+   if UnitInBattleground("player") then
+      return "BATTLEGROUND"
+   elseif UnitInRaid("player") then
+      return "RAID"
+   elseif UnitInParty("player") then
+      return "PARTY"
+   else
+      return nil
+   end
+end
+
+local function sendAddonMessage()
+   local channel = GetPartyType()
+   if not channel then return end
+   local prio
+   -- Player needs to have the addon on and to be inside the raid to be able to send messages
+   if (alwayson and not playerIsUnderMetamorphosis) or (Flump.db.enabled and instanceType=="raid" and not playerIsUnderMetamorphosis) then
+      prio = tostring(priority)
+   else
+      prio = "0"
+   end
+   if(prio~="0" or lastSentPriority~=0) then
+      SendAddonMessage("Flump", prio, channel)
+      lastSentPriority = tonumber(prio)
+   end
+end
+
+local function checkIfAddonShouldBeEnabled()
+   local playerIsInRaidGroup = (not UnitInBattleground("player") and UnitInRaid("player"))
+   local state = false
+   local reason = "addonOff"
+
+   if debug and Flump.db.enabled then
+      if not topPriority then debugSend("You are not the top priority. :(")
+      elseif playerIsUnderMetamorphosis then debugSend("You are top priority but you are transformed so your top priority status is temporarily revogated.")
+      else debugSend("You are the top priority! ;)") end
+   end
+
+   if not Flump.db.enabled or (not playerIsInRaidGroup and not alwayson) then
+      if not playerIsInRaidGroup then
+         reason = "notInRaidGroup"
+      end
+      Flump:UnregisterEvent("CHAT_MSG_ADDON")
+      Flump:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+      Flump:UnregisterEvent("PLAYER_REGEN_DISABLED")
+      Flump:UnregisterEvent("RAID_ROSTER_UPDATE")
+   else
+      if playerIsInRaidGroup then Flump:RegisterEvent("RAID_ROSTER_UPDATE")
+      else Flump:UnregisterEvent("RAID_ROSTER_UPDATE") end
+
+      if (instanceType == "raid" and topPriority) or (alwayson and topPriority) then
+         if (instanceType == "raid" and topPriority) then reason = "topPriority"
+         elseif (alwayson and topPriority) then reason = "alwaysOnAndTopPriority" end
+         --if debug then debugSend("Addon is on because debug mode is on") end
+         Flump:RegisterEvent("CHAT_MSG_ADDON")
+         Flump:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+         Flump:RegisterEvent("PLAYER_REGEN_DISABLED")
+         -- player is not top priority or is not inside the raid
+      elseif not topPriority or not instanceType == "raid" then
+         if not instanceType == "raid" then
+            reason = "notInsideInstance"
+         elseif not topPriority then
+            reason = "notTopPriority"
+         end
+         Flump:RegisterEvent("CHAT_MSG_ADDON")
+         if not playerIsUnderMetamorphosis then Flump:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED") end
+         Flump:RegisterEvent("PLAYER_REGEN_DISABLED")
+      end
+   end
+
+   return state, reason
+end
 
 function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, srcFlags, destGUID, destName, destFlags, spellID, spellName, school, ...)
-    --getOutput(srcName, destName)
-    --if not OUTPUT return end
-   -- [X] died with a Soulstone!
-    if UnitInRaid(destName) then -- If the target isn't in the raid group
-        if spellName == SOULSTONE and event == "SPELL_AURA_REMOVED" then
-            if not soulstones[destName] then soulstones[destName] = {} end
-            soulstones[destName].time = GetTime()
-        elseif spellID == 27827 and event == "SPELL_AURA_APPLIED" then
-            soulstones[destName] = {}
-            soulstones[destName].SoR = true -- Workaround for Spirit of Redemption issue
-        elseif event == "UNIT_DIED" and soulstones[destName] and not UnitIsFeignDeath(destName) then
-            if not soulstones[destName].SoR and (GetTime() - soulstones[destName].time) < 2 then
-                send(ss:format(destName, GetSpellLink(6203)))
-                SendChatMessage(ss:format(destName, GetSpellLink(6203)), "RAID_WARNING")
-            end
-            soulstones[destName] = nil
-        end
-    end
-
    if not UnitInRaid(srcName) then return end -- If the caster isn't in the raid group
-   
-    if UnitAffectingCombat(srcName) then -- If the caster is in combat
-   
-        if event == "SPELL_CAST_SUCCESS" then
-            if spellID == HOLY_WRATH then
-                 send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))
-            elseif spells[spellID] then
-                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z]
-            elseif spellID == 19752 then -- Don't want to announce when it fades, so
-                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
-            elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
-                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y]
-            --[[elseif spellID == 64205 then  -- Workaround for Divine Sacrifice issue
-                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Sacrifice
-                sacrifice[srcGUID] = true]]--
-            elseif special[spellID] then -- Workaround for spells which aren't tanking spells
-                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Aura Mastery
-            elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
-                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Plea            
-            end
+
+   -- Track Demon Form and prevent player from trying to speak if transformed, temporarily assigning his role to somebody else
+   if event == "SPELL_CAST_SUCCESS" or event == "SPELL_AURA_APPLIED" then
+      if spellID == METAMORPHOSIS and srcName == UnitName("player") then
+         playerIsUnderMetamorphosis = true
+         sendAddonMessage()
+         if debug and event == "SPELL_AURA_APPLIED" then debugSend("Meta cast") end
+      end
+   elseif event == "SPELL_AURA_REMOVED" then
+      if spellID == METAMORPHOSIS and srcName == UnitName("player") then
+         playerIsUnderMetamorphosis = false
+         sendAddonMessage()
+         if debug then debugSend("Meta fade") end
+      end
+   end
+   if playerIsUnderMetamorphosis then return end
+
+   --getOutput(srcName, destName)
+   --if not OUTPUT return end
+   -- [X] died with a Soulstone!
+   if UnitInRaid(destName) then -- If the target isn't in the raid group
+      if spellName == SOULSTONE and event == "SPELL_AURA_REMOVED" then
+         if not soulstones[destName] then soulstones[destName] = {} end
+         soulstones[destName].time = GetTime()
+      elseif spellID == 27827 and event == "SPELL_AURA_APPLIED" then
+         soulstones[destName] = {}
+         soulstones[destName].SoR = true -- Workaround for Spirit of Redemption issue
+      elseif event == "UNIT_DIED" and soulstones[destName] and not UnitIsFeignDeath(destName) then
+         if not soulstones[destName].SoR and (GetTime() - soulstones[destName].time) < 2 then
+            send(ss:format(destName, GetSpellLink(6203)))
+            SendChatMessage(ss:format(destName, GetSpellLink(6203)), "RAID_WARNING")
+         end
+         soulstones[destName] = nil
+      end
+   end
+
+   if UnitAffectingCombat(srcName) then -- If the caster is in combat
+      if event == "SPELL_CAST_SUCCESS" then
+         if spellID == HOLY_WRATH then
+              send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))
+         elseif spells[spellID] then
+             send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z]
+         elseif spellID == 19752 then -- Don't want to announce when it fades, so
+             send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
+         elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
+             send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y]
+         --[[elseif spellID == 64205 then  -- Workaround for Divine Sacrifice issue
+             send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Sacrifice
+             sacrifice[srcGUID] = true]]--
+         elseif special[spellID] then -- Workaround for spells which aren't tanking spells
+             send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Aura Mastery
+         elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
+             send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Plea
+         end
          
         elseif event == "SPELL_AURA_APPLIED" then -- [X] cast [Y] on [Z]
             if spellID == 20233 or spellID == 20236 then -- Improved Lay on Hands (Rank 1/Rank 2)
@@ -267,29 +379,38 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
         end    
     end
    
-    if event == "SPELL_CAST_SUCCESS" then
-      if spellID == HEROISM then
+   if event == "SPELL_CAST_SUCCESS" then
+      if spellID == METAMORPHOSIS and srcName==UnitName("player") then
+         playerIsUnderMetamorphosis = true
+         sendAddonMessage()
+         checkIfAddonShouldBeEnabled()
+      elseif spellID == HEROISM then
          send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))  -- [X] used [Y] -- Heroism/Bloodlust
       elseif spellID == MISDIRECTION or spellID == TRICKS then
          send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Misdirection on [Z]
-	  elseif spellID == RAISE_ALLY then
+      elseif spellID == RAISE_ALLY then
          send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Raise Ally on [Z]
-      elseif bots[spellID] then 
+      elseif bots[spellID] then
          send(bot:format(icon(srcName), srcName, GetSpellLink(spellID)))   -- [X] used a [Y] -- Bots
       elseif rituals[spellID] then
          send(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
-    end
+   end
       
-    elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
+   elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
         --[[if spells[spellID] and spellID == 6940 then
                 send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
-        else]]if spellName == SOULSTONE then
-            local _, class = UnitClass(srcName)
-            if class == "WARLOCK" then -- Workaround for Spirit of Redemption issue
-                send(cast:format(icon(srcName), srcName, GetSpellLink(6203), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Soulstone
-            end
-        end
-      
+        else]]--
+      if spellID == METAMORPHOSIS and srcName==UnitName("player") then
+         playerIsUnderMetamorphosis = true
+         sendAddonMessage()
+         checkIfAddonShouldBeEnabled()
+      elseif spellName == SOULSTONE then
+         local _, class = UnitClass(srcName)
+         if class == "WARLOCK" then -- Workaround for Spirit of Redemption issue
+             send(cast:format(icon(srcName), srcName, GetSpellLink(6203), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Soulstone
+         end
+      end
+
    elseif event == "SPELL_CREATE" then
       if port[spellID] then
          send(portal:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] opened a [Z] -- Portals
@@ -318,64 +439,10 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
    end
 end
 
-local function checkIfAddonShouldBeEnabled()
-   local playerIsInRaidGroup = (not UnitInBattleground("player") and UnitInRaid("player"))
-   if debug and Flump.db.enabled then
-      if not topPriority then debugSend("You are not the top priority. :(")
-      else debugSend("You are the top priority! ;)") end
-   end
-
-   if not Flump.db.enabled or (not playerIsInRaidGroup and not alwayson) then
-      Flump:UnregisterEvent("CHAT_MSG_ADDON")
-      Flump:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-      Flump:UnregisterEvent("PLAYER_REGEN_DISABLED")
-      Flump:UnregisterEvent("RAID_ROSTER_UPDATE")
-   else
-      if playerIsInRaidGroup then Flump:RegisterEvent("RAID_ROSTER_UPDATE")
-      else Flump:UnregisterEvent("RAID_ROSTER_UPDATE") end
-
-      if (instanceType == "raid" and topPriority) or alwayson then
-         --if debug then debugSend("Addon is on because debug mode is on") end
-         Flump:RegisterEvent("CHAT_MSG_ADDON")
-         Flump:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-         Flump:RegisterEvent("PLAYER_REGEN_DISABLED")
-      -- player is not top priority or is not inside the raid
-      elseif not topPriority or not instanceType == "raid" then
-         Flump:RegisterEvent("CHAT_MSG_ADDON")
-         Flump:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-         Flump:RegisterEvent("PLAYER_REGEN_DISABLED")
-      end
-   end
-end
-
-local function GetPartyType()
-   if UnitInBattleground("player") then
-      return "BATTLEGROUND"
-   elseif UnitInRaid("player") then
-      return "RAID"
-   elseif UnitInParty("player") then
-      return "PARTY"
-   else
-      return nil
-   end
-end
-
-local function sendAddonMessage()
-   local channel = GetPartyType()
-   if not channel then return end
-   local prio
-   -- Player needs to have the addon on and to be inside the raid to be able to send messages
-   if Flump.db.enabled and instanceType=="raid" then
-      prio = tostring(priority)
-   else
-      prio = "0"
-   end
-   SendAddonMessage("Flump", prio, channel)
-end
-
 function Flump:CHAT_MSG_ADDON(addon, msg, _, sender)
    if addon ~= "Flump" or sender == UnitName("player") then return end
 
+   if lastSentPriority==0 and playerIsUnderMetamorphosis then return end -- Prevent loop where player is transformed and keeps telling everyone that he is 0 but thinks he is 'priority'
    local friendPriority = tonumber(msg)
    if debug then debugSend((sender or "") .. " sent you his priority, your are " .. priority .. " and his is " .. friendPriority) end
 
@@ -386,7 +453,7 @@ function Flump:CHAT_MSG_ADDON(addon, msg, _, sender)
    elseif friendPriority > priority then
       topPriority = false
       checkIfAddonShouldBeEnabled()
-   else
+   elseif friendPriority~=0 then
       priority = math.random(1000000)
       sendAddonMessage()
    end
@@ -412,15 +479,32 @@ end
 local function slashCommand(typed)
    local cmd = string.match(typed,"^(%w+)") -- Gets the first word the user has typed
    if cmd~=nil then cmd = cmd:lower() end   -- And makes it lower case
+   local extra = removeWords(typed,1)
    if(cmd=="debug") then
       debug = not debug
       Flump.db.debug = debug
       debugSend("debug mode turned " .. (debug and "|cff00ff00on|r" or "|cffff0000off|r"))
+      topPriority = true
+      sendAddonMessage()
       checkIfAddonShouldBeEnabled()
    elseif (cmd=="alwayson") then
       alwayson = not alwayson
       Flump.db.alwayson = alwayson
       debugSend("alwayson mode turned " .. (alwayson and "|cff00ff00on|r" or "|cffff0000off|r"))
+      topPriority = true
+      sendAddonMessage()
+      checkIfAddonShouldBeEnabled()
+   elseif (cmd=="prio" or cmd=="priority") then
+      debugSend("my priority is " .. priority)
+   elseif (cmd=="setprio" or cmd=="setpriority") then
+      if not debug then return end
+      if extra~=nil and (is_int(tonumber(extra))) then
+         priority = tonumber(extra)
+         debugSend("priority set to " .. extra)
+         topPriority = true
+         sendAddonMessage()
+         checkIfAddonShouldBeEnabled()
+      end
    elseif (cmd=="ver" or cmd=="version") then
       if addonVersion~=nil then debugSend("version " .. addonVersion) end
    elseif Flump.db.enabled then
