@@ -24,6 +24,7 @@ What is more or less even with fraggerfox's customized version?
 What is different from fraggerfox's customized version?
 
 * Added anti-spam features (flump users will negociate between themselves and only one addon will send the messages)
+* Added temp reassign to other player when a Warlock is top priority but he transforms into Demon Form (metamorphosis)
 * I've changed back from "SAY" to "RAID" because using SAY within a raid is bae
 * Added Hunter's Misdirection ability to the list of spells available
 * Added DK's Raise Ally ability to the list of spells available
