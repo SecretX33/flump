@@ -7,6 +7,13 @@ local MIN_TANK_HP     = 55000     -- How much health must a player have to be co
 local MIN_HEALER_MANA = 20000     -- How much mana must a player have to be considered a healer?
 local DIVINE_PLEA     = false     -- Announce when (holy) Paladins cast Divine Plea? (-50% healing)
 
+-- Chat Parameters
+local maxMessagesSent             = 4   -- Max messages that can be send at once before getting muted by the server
+local gracePeriodForSendMessages  = 1.2   -- Assuming that we can send at most 'maxMessagesSent' every 'gracePeriodForSendMessages' seconds
+-- Chat Variables
+local timeMessagesSent            = {}
+local queuedMessages
+
 local debug    = false
 local alwayson = false
 local status   = "|cff39d7e5Flump: %s|r"
@@ -15,6 +22,7 @@ local bot    = "%s%s used a %s!"
 local used   = "%s%s used %s!"
 local sw     = "%s faded from %s%s!"
 local cast   = "%s%s cast %s on %s%s!"
+local castnt = "%s%s cast %s!"  -- Cast no target
 local fade   = "%s%s's %s faded from %s%s!"
 local feast  = "%s%s prepares a %s!"
 local gs     = "%s%s's %s consumed: %d heal!"
@@ -49,8 +57,19 @@ local addonVersion
 
 -- Upvalues
 local UnitInBattleground, UnitInRaid, UnitAffectingCombat = UnitInBattleground, UnitInRaid, UnitAffectingCombat
-local UnitHealthMax, UnitManaMax = UnitHealthMax, UnitManaMax
-local GetSpellLink, UnitAffectingCombat, format = GetSpellLink, UnitAffectingCombat, string.format
+local UnitHealthMax, UnitManaMax, GetSpellLink, format = UnitHealthMax, UnitManaMax, GetSpellLink, string.format
+
+local debugSpell = {
+   -- Paladin
+   [20271] = true, -- Judgement of Light
+   [53408] = true, -- Judgement of Wisdom
+   [48785] = false, -- Flash Heal (for debug)
+   -- Hunter (debug only)
+   [53209] = false, -- Chimera Shot
+   [49050] = false, -- Aimed Shot
+   [49052] = false, -- Steady Shot
+   [49001] = false, -- Serpent Sting
+}
 
 -- http://www.wowhead.com/?search=portal#abilities
 local port = {
@@ -86,15 +105,9 @@ local spells = {
    [6940]  = false, -- Hand of Sacrifice
    [20233] = false, -- Lay on Hands (Rank 1) [Fade]
    [20236] = false, -- Lay on Hands (Rank 2) [Fade]
-   [48785] = false, -- Flash Heal (for debug)
    -- Priest
    [47788] = true,  -- Guardian Spirit
    [33206] = true,  -- Pain Suppression
-   -- Hunter (debug only)
-   [53209] = false, -- Chimera Shot
-   [49050] = false, -- Aimed Shot
-   [49052] = false, -- Steady Shot
-   [49001] = false, -- Serpent Sting
 }
 
 local bots = {
@@ -162,11 +175,56 @@ Flump:SetScript("OnEvent", function(self, event, ...)
 end)
 
 local function send(msg)
+   if(msg~=nil) then print("|cff39d7e5Flump:|r " .. msg) end
+end
+
+local function say(msg)
    if(msg~=nil) then SendChatMessage(msg, OUTPUT) end
 end
 
-local function debugSend(msg)
-   if(msg~=nil) then print("|cff39d7e5Flump:|r " .. msg) end
+local function getTableLength(table)
+   local count = 0
+   for _ in pairs(table) do count = count + 1 end
+   return count
+end
+
+-- Addon is going to check how many messages got sent in the last 'gracePeriodForSendMessages', and if its equal or maxMessageSent then this function will return true, indicating that player cannot send more messages for now
+local function isSendMessageGoingToMute()
+   local now = GetTime()
+   local count = 0
+
+   for index, string in pairs(timeMessagesSent) do
+      if (now <= (tonumber(string) + gracePeriodForSendMessages)) then
+         count = count + 1
+      else
+         table.remove(timeMessagesSent,index)
+      end
+   end
+   if count >= maxMessagesSent then return true
+   else return false end
+end
+
+-- Frame update handler
+local function onUpdate(this)
+   if not Flump.db.enabled then return end
+   if not queuedMessages then
+      this:SetScript("OnUpdate", nil)
+      return
+   end
+   if isSendMessageGoingToMute() then return end
+
+   table.insert(timeMessagesSent, GetTime())
+   say(queuedMessages[1])
+   table.remove(queuedMessages,1)
+   if getTableLength(queuedMessages)==0 then queuedMessages = nil end
+end
+
+local function queueSend(msg)
+   if(msg~=nil) then
+      queuedMessages = queuedMessages or {}
+      table.insert(queuedMessages,msg)
+      Flump:SetScript("OnUpdate", onUpdate)
+   end
 end
 
 -- Remove spaces on start and end of string
@@ -190,19 +248,6 @@ local function removeWords(myString, numberOfWords)
    return ""
 end
 -- end of [string utils]
-
---[[local function getOutput(srcName, destName)
-    -- eu / amigo          true AND true OR false
-    -- eu / nil            true AND false OR true
-    -- eu / fora da PT     true AND false OR false
-    if UnitInRaid(srcName) and UnitInRaid(destName) or not destName then
-        OUTPUT = RAID_OUTPUT
-    elseif UnitInParty(srcName) and UnitInParty(destName) or not destName then
-        OUTPUT = PARTY_OUTPUT
-    else
-        OUTPUT = nil
-    end
-end]]--
 
 local function icon(name)
    local n = GetRaidTargetIndex(name)
@@ -243,9 +288,9 @@ local function checkIfAddonShouldBeEnabled()
    local reason = "addonOff"
 
    if debug and Flump.db.enabled then
-      if not topPriority then debugSend("You are not the top priority. :(")
-      elseif playerIsUnderMetamorphosis then debugSend("You are top priority but you are transformed so your top priority status is temporarily revogated.")
-      else debugSend("You are the top priority! ;)") end
+      if not topPriority then send("You are not the top priority. :(")
+      elseif playerIsUnderMetamorphosis then send("You are top priority but you are transformed so your top priority status is temporarily revogated.")
+      else send("You are the top priority! ;)") end
    end
 
    if not Flump.db.enabled or (not playerIsInRaidGroup and not alwayson) then
@@ -263,7 +308,7 @@ local function checkIfAddonShouldBeEnabled()
       if (instanceType == "raid" and topPriority) or (alwayson and topPriority) then
          if (instanceType == "raid" and topPriority) then reason = "topPriority"
          elseif (alwayson and topPriority) then reason = "alwaysOnAndTopPriority" end
-         --if debug then debugSend("Addon is on because debug mode is on") end
+         --if debug then send("Addon is on because debug mode is on") end
          Flump:RegisterEvent("CHAT_MSG_ADDON")
          Flump:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
          Flump:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -291,13 +336,13 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
       if spellID == METAMORPHOSIS and srcName == UnitName("player") then
          playerIsUnderMetamorphosis = true
          sendAddonMessage()
-         if debug and event == "SPELL_AURA_APPLIED" then debugSend("Meta cast") end
+         if debug and event == "SPELL_AURA_APPLIED" then send("Meta cast") end
       end
    elseif event == "SPELL_AURA_REMOVED" then
       if spellID == METAMORPHOSIS and srcName == UnitName("player") then
          playerIsUnderMetamorphosis = false
          sendAddonMessage()
-         if debug then debugSend("Meta fade") end
+         if debug then send("Meta fade") end
       end
    end
    if playerIsUnderMetamorphosis then return end
@@ -314,127 +359,127 @@ function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, s
          soulstones[destName].SoR = true -- Workaround for Spirit of Redemption issue
       elseif event == "UNIT_DIED" and soulstones[destName] and not UnitIsFeignDeath(destName) then
          if not soulstones[destName].SoR and (GetTime() - soulstones[destName].time) < 2 then
-            send(ss:format(destName, GetSpellLink(6203)))
+            queueSend(ss:format(destName, GetSpellLink(6203)))
             SendChatMessage(ss:format(destName, GetSpellLink(6203)), "RAID_WARNING")
          end
          soulstones[destName] = nil
       end
    end
 
+   if debug and debugSpell[spellID] then
+      send("spell " .. GetSpellLink(spellID) .. " was casted by " .. srcName)
+      if destName~=nil then queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
+      else queueSend(castnt:format(icon(srcName), srcName, GetSpellLink(spellID))) end
+      return
+   end
+
    if UnitAffectingCombat(srcName) then -- If the caster is in combat
       if event == "SPELL_CAST_SUCCESS" then
          if spellID == HOLY_WRATH then
-              send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))
+            queueSend(used:format(icon(srcName), srcName, GetSpellLink(spellID)))
          elseif spells[spellID] then
-             send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z]
+            queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z]
          elseif spellID == 19752 then -- Don't want to announce when it fades, so
-             send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
+            queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
          elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
-             send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y]
-         --[[elseif spellID == 64205 then  -- Workaround for Divine Sacrifice issue
-             send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Sacrifice
-             sacrifice[srcGUID] = true]]--
+            queueSend(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Y]
+         --elseif spellID == 64205 then  -- Workaround for Divine Sacrifice issue
+         --   queueSend(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Sacrifice
+         --   sacrifice[srcGUID] = true
          elseif special[spellID] then -- Workaround for spells which aren't tanking spells
-             send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Aura Mastery
+            queueSend(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Aura Mastery
          elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
-             send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Plea
+            queueSend(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used Divine Plea
          end
          
-        elseif event == "SPELL_AURA_APPLIED" then -- [X] cast [Y] on [Z]
-            if spellID == 20233 or spellID == 20236 then -- Improved Lay on Hands (Rank 1/Rank 2)
-                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
-            elseif bonus[spellID] then
-                send(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Z] (bonus)
-            elseif spellID == 66233 then
-                if not ad_heal then -- If the Ardent Defender heal message hasn't been sent already
-                send(ad:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X]'s [Y] consumed
-                end
-                ad_heal = false
-            elseif spellName == HOP and UnitHealthMax(destName) >= MIN_TANK_HP then
-                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast Hand of Protection on [Z]
-            end
+      elseif event == "SPELL_AURA_APPLIED" then -- [X] cast [Y] on [Z]
+         if spellID == 20233 or spellID == 20236 then -- Improved Lay on Hands (Rank 1/Rank 2)
+            queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
+         elseif bonus[spellID] then
+            queueSend(used:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used [Z] (bonus)
+         elseif spellID == 66233 then
+             if not ad_heal then -- If the Ardent Defender heal message hasn't been sent already
+            queueSend(ad:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X]'s [Y] consumed
+             end
+             ad_heal = false
+         elseif spellName == HOP and UnitHealthMax(destName) >= MIN_TANK_HP then
+            queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast Hand of Protection on [Z]
+         end
       
-        elseif event == "SPELL_HEAL" then
-            if spellID == 48153 or spellID == 66235 then -- Guardian Spirit / Ardent Defender
-                local amount = ...
-                ad_heal = true
-                send(gs:format(icon(srcName), srcName, GetSpellLink(spellID), amount)) -- [X]'s [Y] consumed: [Z] heal
-            end
+      elseif event == "SPELL_HEAL" then
+         if spellID == 48153 or spellID == 66235 then -- Guardian Spirit / Ardent Defender
+            local amount = ...
+            ad_heal = true
+            queueSend(gs:format(icon(srcName), srcName, GetSpellLink(spellID), amount)) -- [X]'s [Y] consumed: [Z] heal
+         end
          
-        elseif event == "SPELL_AURA_REMOVED" then
-            if spells[spellID] or (spellName == HOP and UnitHealthMax(destName) >= MIN_TANK_HP) then
-                send(fade:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X]'s [Y] faded from [Z]
-            elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
-                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y]
-            elseif bonus[spellID] then
-                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y] (bonus)
-            --[[elseif spellID == 64205 and sacrifice[destGUID] then
-                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Sacrifice faded from [Y]
-                sacrifice[destGUID] = nil]]--
-            elseif special[spellID] then -- Workaround for spells which aren't tanking spells
-                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Aura Mastery faded from [X]
-            elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
-                send(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Plea faded from [X]
-            end
-        end    
-    end
+      elseif event == "SPELL_AURA_REMOVED" then
+         if spells[spellID] or (spellName == HOP and UnitHealthMax(destName) >= MIN_TANK_HP) then
+            queueSend(fade:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X]'s [Y] faded from [Z]
+         elseif use[spellID] and UnitHealthMax(srcName) >= MIN_TANK_HP then
+            queueSend(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y]
+         elseif bonus[spellID] then
+            queueSend(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- [X] faded from [Y] (bonus)
+         --elseif spellID == 64205 and sacrifice[destGUID] then
+         --   queueSend(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Sacrifice faded from [Y]
+         --   sacrifice[destGUID] = nil
+         elseif special[spellID] then -- Workaround for spells which aren't tanking spells
+            queueSend(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Aura Mastery faded from [X]
+         elseif DIVINE_PLEA and spellID == 54428 and UnitManaMax(srcName) >= MIN_HEALER_MANA then
+            queueSend(sw:format(GetSpellLink(spellID), icon(srcName), srcName)) -- Divine Plea faded from [X]
+         end
+      end
+   end
    
    if event == "SPELL_CAST_SUCCESS" then
-      if spellID == METAMORPHOSIS and srcName==UnitName("player") then
-         playerIsUnderMetamorphosis = true
-         sendAddonMessage()
-         checkIfAddonShouldBeEnabled()
-      elseif spellID == HEROISM then
-         send(used:format(icon(srcName), srcName, GetSpellLink(spellID)))  -- [X] used [Y] -- Heroism/Bloodlust
+      if spellID == HEROISM then
+         queueSend(used:format(icon(srcName), srcName, GetSpellLink(spellID)))  -- [X] used [Y] -- Heroism/Bloodlust
       elseif spellID == MISDIRECTION or spellID == TRICKS then
-         send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Misdirection on [Z]
+         queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Misdirection on [Z]
       elseif spellID == RAISE_ALLY then
-         send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Raise Ally on [Z]
+         queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] used Raise Ally on [Z]
       elseif bots[spellID] then
-         send(bot:format(icon(srcName), srcName, GetSpellLink(spellID)))   -- [X] used a [Y] -- Bots
+         queueSend(bot:format(icon(srcName), srcName, GetSpellLink(spellID)))   -- [X] used a [Y] -- Bots
       elseif rituals[spellID] then
-         send(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
-   end
+         queueSend(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
+      end
       
    elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
-        --[[if spells[spellID] and spellID == 6940 then
-                send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
-        else]]--
-      if spellID == METAMORPHOSIS and srcName==UnitName("player") then
-         playerIsUnderMetamorphosis = true
-         sendAddonMessage()
-         checkIfAddonShouldBeEnabled()
-      elseif spellName == SOULSTONE then
+      -- Hand of Sacrifice
+      --if spells[spellID] and spellID == 6940 then
+      --  end(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
+      --else
+      if spellName == SOULSTONE then
          local _, class = UnitClass(srcName)
          if class == "WARLOCK" then -- Workaround for Spirit of Redemption issue
-             send(cast:format(icon(srcName), srcName, GetSpellLink(6203), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Soulstone
+            queueSend(cast:format(icon(srcName), srcName, GetSpellLink(6203), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Soulstone
          end
       end
 
    elseif event == "SPELL_CREATE" then
       if port[spellID] then
-         send(portal:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] opened a [Z] -- Portals
+         queueSend(portal:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] opened a [Z] -- Portals
       elseif toys[spellID] then
-         send(bot:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used a [Z]
+         queueSend(bot:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] used a [Z]
       end
       
    elseif event == "SPELL_CAST_START" then
       if feasts[spellID] then
-         send(feast:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] prepares a [Z] -- Feasts
+         queueSend(feast:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] prepares a [Z] -- Feasts
       end
       
    elseif event == "SPELL_RESURRECT" then
       if spellName == REBIRTH then -- Check name instead of ID to save checking all ranks
-         send(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Rebirth
+         queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z] -- Rebirth
       elseif spellName == CABLES then
-         send(res:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
+         queueSend(res:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
       end   
       
    elseif event == "SPELL_DISPEL_FAILED" then
       local extraID, extraName = ...
       local target = fails[extraName]
       if target or destName == target then
-         send(dispel:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName, GetSpellLink(extraID))) -- [W]'s [X] failed to dispel [Y]'s [Z]
+         queueSend(dispel:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName, GetSpellLink(extraID))) -- [W]'s [X] failed to dispel [Y]'s [Z]
       end
    end
 end
@@ -444,7 +489,7 @@ function Flump:CHAT_MSG_ADDON(addon, msg, _, sender)
 
    if lastSentPriority==0 and playerIsUnderMetamorphosis then return end -- Prevent loop where player is transformed and keeps telling everyone that he is 0 but thinks he is 'priority'
    local friendPriority = tonumber(msg)
-   if debug then debugSend((sender or "") .. " sent you his priority, your are " .. priority .. " and his is " .. friendPriority) end
+   if debug then send((sender or "") .. " sent you his priority, your are " .. priority .. " and his is " .. friendPriority) end
 
    if priority > friendPriority then
       topPriority = true
@@ -464,7 +509,7 @@ function Flump:PLAYER_REGEN_DISABLED()
 end
 
 function Flump:RAID_ROSTER_UPDATE()
-   if debug then debugSend("raid roaster updated.") end
+   if debug then send("raid roaster updated.") end
    topPriority = true
    checkIfAddonShouldBeEnabled()
    sendAddonMessage()
@@ -483,30 +528,30 @@ local function slashCommand(typed)
    if(cmd=="debug") then
       debug = not debug
       Flump.db.debug = debug
-      debugSend("debug mode turned " .. (debug and "|cff00ff00on|r" or "|cffff0000off|r"))
+      send("debug mode turned " .. (debug and "|cff00ff00on|r" or "|cffff0000off|r"))
       topPriority = true
       sendAddonMessage()
       checkIfAddonShouldBeEnabled()
    elseif (cmd=="alwayson") then
       alwayson = not alwayson
       Flump.db.alwayson = alwayson
-      debugSend("alwayson mode turned " .. (alwayson and "|cff00ff00on|r" or "|cffff0000off|r"))
+      send("alwayson mode turned " .. (alwayson and "|cff00ff00on|r" or "|cffff0000off|r"))
       topPriority = true
       sendAddonMessage()
       checkIfAddonShouldBeEnabled()
    elseif (cmd=="prio" or cmd=="priority") then
-      debugSend("my priority is " .. priority)
+      send("my priority is " .. priority)
    elseif (cmd=="setprio" or cmd=="setpriority") then
       if not debug then return end
       if extra~=nil and (is_int(tonumber(extra))) then
          priority = tonumber(extra)
-         debugSend("priority set to " .. extra)
+         send("priority set to " .. extra)
          topPriority = true
          sendAddonMessage()
          checkIfAddonShouldBeEnabled()
       end
    elseif (cmd=="ver" or cmd=="version") then
-      if addonVersion~=nil then debugSend("version " .. addonVersion) end
+      if addonVersion~=nil then send("version " .. addonVersion) end
    elseif Flump.db.enabled then
       Flump.db.enabled = false
       checkIfAddonShouldBeEnabled()
@@ -534,8 +579,8 @@ function Flump:ADDON_LOADED(addon)
 
    SLASH_FLUMP1 = "/flump"
    SlashCmdList.FLUMP = function(cmd) slashCommand(cmd) end
-   if debug then debugSend("remember that debug mode is |cff00ff00ON|r.") end
-   if alwayson then debugSend("remember that alwayson mode is |cff00ff00ON|r.") end
+   if debug then send("remember that debug mode is |cff00ff00ON|r.") end
+   if alwayson then send("remember that alwayson mode is |cff00ff00ON|r.") end
    self:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
 
