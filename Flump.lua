@@ -548,7 +548,7 @@ do
    local syncHandlers = {}
 
    syncHandlers["Flump-Prio"] = function(msg, channel, sender)
-      if msg == "Hi!" then
+      if msg == "Hi!" and Flump.db.enabled then
          sendSync("Flump-Prio", Flump.Priority)
       else
          local prio = tonumber(msg or "")
@@ -556,7 +556,7 @@ do
          raid[sender].priority = prio
          if sender~=UnitName("player") and prio == Flump.Priority then
             Flump.Priority = math.random(maxPriority)
-            sendSync("Flump-Prio", Flump.Priority)
+            if Flump.db.enabled then sendSync("Flump-Prio", Flump.Priority) end
          end
          if debug and sender~=UnitName("player") then send(sender .. " send you this prio: " .. (prio or 0)) end
          Flump:ReorderPriorities()
