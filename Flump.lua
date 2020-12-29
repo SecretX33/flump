@@ -6,7 +6,7 @@ local DIVINE_PLEA     = false     -- Announce when (holy) Paladins cast Divine P
 
 -- Chat Parameters
 local maxMessagesSent             = 3   -- Max messages that can be send at once before getting muted by the server
-local gracePeriodForSendMessages  = 1   -- Assuming that we can send at most 'maxMessagesSent' every 'gracePeriodForSendMessages' seconds
+local gracePeriodForSendMessages  = 1.3   -- Assuming that we can send at most 'maxMessagesSent' every 'gracePeriodForSendMessages' seconds
 -- Chat Variables
 local timeMessagesSent            = {}
 local queuedMessages
@@ -558,7 +558,7 @@ do
             Flump.Priority = math.random(maxPriority)
             if Flump.db.enabled then sendSync("Flump-Prio", Flump.Priority) end
          end
-         if debug and sender~=UnitName("player") then send(sender .. " send you this prio: " .. (prio or 0)) end
+         --if debug and sender~=UnitName("player") then send(sender .. " send you this prio: " .. (prio or 0)) end
          Flump:ReorderPriorities()
       end
    end
@@ -610,6 +610,7 @@ do
                raid[name].class = fileName
                raid[name].online = online
                raid[name].id = "raid"..i
+               if raid[name].priority~=nil and not online then raid[name].priority=nil end
                raid[name].updated = true
             end
          end
