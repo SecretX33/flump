@@ -508,7 +508,7 @@ do
       if a.priority and b.priority then
          if a.version and b.version and a.version~=b.version then return compareVersions(a.version,b.version) end
          if a.rank and b.rank and a.rank~=b.rank then return a.rank > b.rank end
-         if a.priority and b.priority then return a.priority > b.priority end
+         if a.priority and b.priority and a.priority~=b.priority then return a.priority > b.priority end
          if a.id and b.id and a.id~=b.id then return a.id > b.id end
       end
       return a.priority~=nil
@@ -551,7 +551,7 @@ do
       if msg == "Hi!" and Flump.db.enabled then
          sendSync("Flump-Prio", Flump.Priority)
       else
-         local prio = tonumber(msg or "")
+         local prio = tonumber(msg)
          raid[sender] = raid[sender] or {}
          raid[sender].priority = prio
          if sender~=UnitName("player") and prio == Flump.Priority then
@@ -698,6 +698,11 @@ do
       name = name or UnitName("player")
       return (raid[name] and raid[name].id) or "none"
    end
+
+   function Flump:ResetRaidInfo()
+      inRaid = false
+      raid = {}
+   end
 end
 
 function Flump:PLAYER_REGEN_ENABLED()
@@ -797,9 +802,10 @@ local function slashCommand(typed)
             "PLAYER_REGEN_ENABLED",
             "COMBAT_LOG_EVENT_UNFILTERED"
       )
+      Flump:ResetRaidInfo()
       Flump:RAID_ROSTER_UPDATE()
       Flump:PARTY_MEMBERS_CHANGED()
-      sendSync("Flump-Prio", Flump.Priority)
+      --sendSync("Flump-Prio", Flump.Priority)
       print(status:format("|cff00ff00on|r"))
    end
 end
