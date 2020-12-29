@@ -299,9 +299,9 @@ do
             else
                topPriority = false
                for i,name in ipairs(raidOrdered) do
-                  if name and raid[name].priority and name == UnitName("player") and not tableHasThisEntry(playersUnableToSpeak, name) then
-                     if debug then send(srcName .. " cast meta and you are the top priority after him, changing the prio to you temporarily.") end
-                     topPriority = true
+                  if name and raid[name].priority and not tableHasThisEntry(playersUnableToSpeak, name) then
+                     if debug and name == UnitName("player") then send(srcName .. " cast meta and you are the top priority after him, changing the prio to you temporarily.") end
+                     topPriority = name==UnitName("player")
                      break
                   end
                end
