@@ -841,8 +841,8 @@ function Flump:ADDON_LOADED(addon)
    )
    if Flump.db.enabled then
       self:RegisterEvents(
-            "PLAYER_REGEN_ENABLED",
-            "COMBAT_LOG_EVENT_UNFILTERED"
+         "PLAYER_REGEN_ENABLED",
+         "COMBAT_LOG_EVENT_UNFILTERED"
       )
    end
    self:RAID_ROSTER_UPDATE()
