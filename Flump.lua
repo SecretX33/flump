@@ -467,18 +467,18 @@ do
    end
 end
 
+local function splitVersion(version, delimiter)
+   local result = {};
+   for match in (version..delimiter):gmatch("(.-)"..delimiter) do
+      table.insert(result, tonumber(match or 0));
+   end
+   return result;
+end
+
 -----------------------------
 --  Ordering Raid Members  --
 -----------------------------
 do
-   local function splitVersion(version, delimiter)
-      local result = {};
-      for match in (version..delimiter):gmatch("(.-)"..delimiter) do
-         table.insert(result, tonumber(match or 0));
-      end
-      return result;
-   end
-
    local function compareVersions(v1,v2)
       if not v1 or not v2 then return v1~=nil end
 
@@ -569,7 +569,7 @@ do
       if msg == "Hi!" then
          sendSync("Flump-Ver", Flump.Version)
       else
-         local version = msg or ""
+         local version = msg
          if version and raid[sender] then
             raid[sender].version = version
          end
@@ -711,14 +711,7 @@ end
 
 do
    local sortedTable = {}
-   local function splitVersion(version, delimiter)
-      local result = {};
-      for match in (version..delimiter):gmatch("(.-)"..delimiter) do
-         table.insert(result, tonumber(match or 0));
-      end
-      return result;
-   end
-   local function sortVersion(v1,v2)
+   local function sortVersion(v1, v2)
       if not v1 or not v2 or not v1.version or not v2.version then return v1.version~=nil end
 
       --local a1, b1, c1, d1 = string.split(".",v1.version)
