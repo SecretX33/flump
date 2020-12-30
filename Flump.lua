@@ -205,6 +205,7 @@ local function tableHasThisEntry(table, entry)
 end
 
 local function getTableLength(table)
+   table = table or {}
    local count = 0
    for _ in pairs(table) do count = count + 1 end
    return count
@@ -468,11 +469,14 @@ do
 end
 
 local function splitVersion(version, delimiter)
-   local result = {};
-   for match in (version..delimiter):gmatch("(.-)"..delimiter) do
-      table.insert(result, tonumber(match or 0));
+   if delimiter == nil then
+      delimiter = "%s"
    end
-   return result;
+   local t={}
+   for str in string.gmatch(version, "([^"..delimiter.."]+)") do
+      table.insert(t, tonumber(str or 0))
+   end
+   return t
 end
 
 -----------------------------
@@ -480,18 +484,8 @@ end
 -----------------------------
 do
    local function compareVersions(v1,v2)
-      if not v1 or not v2 then return v1~=nil end
-
-      --local a1, b1, c1, d1 = string.split(".",v1)
-      --local a2, b2, c2, d2 = string.split(".",v2)
-
-      --if tonumber(a1 or 0) ~= tonumber(a2 or 0) then return a1 > a2 end
-      --if tonumber(b1 or 0) ~= tonumber(b2 or 0) then return b1 > b2 end
-      --if tonumber(c1 or 0) ~= tonumber(c2 or 0) then return c1 > c2 end
-      --if tonumber(d1 or 0) ~= tonumber(d2 or 0) then return d1 > d2 end
-
-      local a = splitVersion(v1, ".")
-      local b = splitVersion(v2, ".")
+      local a = splitVersion((v1 or "0"),".")
+      local b = splitVersion((v2 or "0"),".")
 
       for i=1,math.max(getTableLength(a),getTableLength(b)) do
          if not a[i] or not b[i] then return a[i]~=nil end
@@ -562,15 +556,13 @@ do
          Flump:ReorderPriorities()
       end
    end
-   -- garantee compatible with older version
-   syncHandlers["Flump"] = syncHandlers["Flump-Prio"]
 
    syncHandlers["Flump-Ver"] = function(msg, channel, sender)
       if msg == "Hi!" then
          sendSync("Flump-Ver", Flump.Version)
       else
          local version = msg
-         if version and raid[sender] then
+         if version and version~="" and raid[sender] then
             raid[sender].version = version
          end
       end
@@ -710,9 +702,11 @@ function Flump:PLAYER_REGEN_ENABLED()
 end
 
 do
-   local sortedTable = {}
    local function sortVersion(v1, v2)
-      if not v1 or not v2 or not v1.version or not v2.version then return v1.version~=nil end
+      v1 = v1 or {}
+      v2 = v2 or {}
+      local a = splitVersion((v1.version or "0"),".")
+      local b = splitVersion((v2.version or "0"),".")
 
       --local a1, b1, c1, d1 = string.split(".",v1.version)
       --local a2, b2, c2, d2 = string.split(".",v2.version)
@@ -722,20 +716,19 @@ do
       --if tonumber(c1 or 0) ~= tonumber(c2 or 0) then return c1 > c2 end
       --if tonumber(d1 or 0) ~= tonumber(d2 or 0) then return d1 > d2 end
 
-      local a = splitVersion(v1.version, ".")
-      local b = splitVersion(v2.version, ".")
-
-      for i=1,math.max(getTableLength(a),getTableLength(b)) do
+      for i=1, math.max(getTableLength(a), getTableLength(b)) do
          if not a[i] or not b[i] then return a[i]~=nil end
          if a[i]~=b[i] then return a[i] > b[i] end
       end
       return true
    end
+
    function Flump:ShowVersions()
+      local sortedTable = {}
       for i, v in pairs(raid) do
-         table.insert(sortedTable, v)
+         if v~=nil then table.insert(sortedTable, v) end
       end
-      table.sort(sortedTable, sortVersion)
+      if getTableLength(sortedTable) > 1 then table.sort(sortedTable, sortVersion) end
       print("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5Flump - Versions|r")
       for i, v in ipairs(sortedTable) do
          if v.version then
@@ -798,7 +791,6 @@ local function slashCommand(typed)
       Flump:ResetRaidInfo()
       Flump:RAID_ROSTER_UPDATE()
       Flump:PARTY_MEMBERS_CHANGED()
-      --sendSync("Flump-Prio", Flump.Priority)
       print(status:format("|cff00ff00on|r"))
    end
 end
