@@ -484,10 +484,14 @@ end
 -----------------------------
 do
    local function compareVersions(v1,v2)
-      local a = splitVersion((v1 or "0"),".")
-      local b = splitVersion((v2 or "0"),".")
+      if not v1 then return false end
+      if not v2 then return true end
 
-      for i=1,math.max(getTableLength(a),getTableLength(b)) do
+      local a = splitVersion(v1,".")
+      local b = splitVersion(v2,".")
+
+      local max = math.max(getTableLength(a), getTableLength(b), 1)
+      for i=1, max do
          if not a[i] or not b[i] then return a[i]~=nil end
          if a[i]~=b[i] then return a[i] > b[i] end
       end
@@ -507,7 +511,6 @@ do
       end
       return a.priority~=nil
    end
-
    function Flump:ReorderPriorities()
       if not raid then return end
       raidOrdered = {}
@@ -515,7 +518,6 @@ do
       for k,v in pairs(raid) do
          if v~=nil and v.id then table.insert(raidOrdered,k) end
       end
-
       local length = getTableLength(raidOrdered)
       if length == 0 then return end
       if length > 1 then table.sort(raidOrdered,comparePriorities) end
@@ -526,10 +528,8 @@ do
       end
 
       if raidOrdered[1] == UnitName("player") then
-         --if debug then send("You are the top priority ;)") end
          topPriority = true
       else
-         --if debug then send("You are NOT the top priority :/") end
          topPriority = false
       end
    end
@@ -545,15 +545,17 @@ do
       if msg == "Hi!" and Flump.db.enabled then
          sendSync("Flump-Prio", Flump.Priority)
       else
-         local prio = tonumber(msg)
-         raid[sender] = raid[sender] or {}
-         raid[sender].priority = prio
-         if sender~=UnitName("player") and prio == Flump.Priority then
-            Flump.Priority = math.random(maxPriority)
-            if Flump.db.enabled then sendSync("Flump-Prio", Flump.Priority) end
+         local priority = tonumber(msg)
+         if sender and sender~="" and (priority==nil or type(priority) == "number") then
+            --if debug then send(format("%s sent you his priority (%s)",sender,(priority or 0))) end
+            raid[sender] = raid[sender] or {}
+            raid[sender].priority = priority
+            if sender~=UnitName("player") and priority == Flump.Priority then
+               Flump.Priority = math.random(maxPriority)
+               if Flump.db.enabled then sendSync("Flump-Prio", Flump.Priority) end
+            end
+            Flump:ReorderPriorities()
          end
-         --if debug and sender~=UnitName("player") then send(sender .. " send you this prio: " .. (prio or 0)) end
-         Flump:ReorderPriorities()
       end
    end
 
@@ -562,7 +564,7 @@ do
          sendSync("Flump-Ver", Flump.Version)
       else
          local version = msg
-         if version and version~="" and raid[sender] then
+         if version and version~="" and sender and sender~="" and raid and raid[sender] then
             raid[sender].version = version
          end
       end
@@ -703,20 +705,16 @@ end
 
 do
    local function sortVersion(v1, v2)
-      v1 = v1 or {}
-      v2 = v2 or {}
-      local a = splitVersion((v1.version or "0"),".")
-      local b = splitVersion((v2.version or "0"),".")
+      if not v1 then return false end
+      if not v2 then return true end
+      if not v1.version then return false end
+      if not v2.version then return true end
 
-      --local a1, b1, c1, d1 = string.split(".",v1.version)
-      --local a2, b2, c2, d2 = string.split(".",v2.version)
-      --
-      --if tonumber(a1 or 0) ~= tonumber(a2 or 0) then return a1 > a2 end
-      --if tonumber(b1 or 0) ~= tonumber(b2 or 0) then return b1 > b2 end
-      --if tonumber(c1 or 0) ~= tonumber(c2 or 0) then return c1 > c2 end
-      --if tonumber(d1 or 0) ~= tonumber(d2 or 0) then return d1 > d2 end
+      local a = splitVersion(v1.version,".")
+      local b = splitVersion(v2.version,".")
 
-      for i=1, math.max(getTableLength(a), getTableLength(b)) do
+      local max = math.max(getTableLength(a), getTableLength(b), 1)
+      for i=1, max do
          if not a[i] or not b[i] then return a[i]~=nil end
          if a[i]~=b[i] then return a[i] > b[i] end
       end
@@ -731,8 +729,10 @@ do
       if getTableLength(sortedTable) > 1 then table.sort(sortedTable, sortVersion) end
       print("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5Flump - Versions|r")
       for i, v in ipairs(sortedTable) do
-         if v.version then
+         if v.version and v.priority then
             print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s", v.name, v.version))
+         elseif v.version then
+            print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s (disabled)", v.name, v.version))
          else
             print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: Flump not installed", v.name))
          end
@@ -742,7 +742,7 @@ do
             table.remove(sortedTable, i)
          end
       end
-     print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5Found|r |cfff0a71f%s|r |cff39d7e5players with Flump|r",#sortedTable))
+     print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5Found|r |cfff0a71f%s|r |cff39d7e5player%s with Flump|r",#sortedTable,(#sortedTable > 1 and "s" or "")))
       for i = #sortedTable, 1, -1 do
          sortedTable[i] = nil
       end
@@ -759,8 +759,7 @@ local function slashCommand(typed)
       send("debug mode turned " .. (debug and "|cff00ff00on|r" or "|cffff0000off|r"))
    elseif (cmd=="prio" or cmd=="priority" or cmd=="p") then
       send("my priority is " .. Flump.Priority)
-   elseif (cmd=="setprio" or cmd=="setpriority" or cmd=="sp") then
-      if not debug then return end
+   elseif (cmd=="setprio" or cmd=="setpriority" or cmd=="sp") and debug then
       if extra~=nil and tonumber(extra)~=nil then
          Flump.Priority = tonumber(extra)
          send("priority set to " .. extra)
@@ -768,12 +767,12 @@ local function slashCommand(typed)
       end
    elseif (cmd=="ver" or cmd=="version") then
       Flump:ShowVersions()
+   elseif (cmd=="priotable" or cmd=="pt") and debug then
+      send("Table of priorities")
+      for i,n in ipairs(raidOrdered) do send(format("%s. %s (%s - %s)",i,n,(raid[n].priority or 0),(raid[n].version or 0))) end
    elseif Flump.db.enabled then
       Flump.db.enabled = false
       Flump:UnregisterEvents(
-            "RAID_ROSTER_UPDATE",
-            "PARTY_MEMBERS_CHANGED",
-            "CHAT_MSG_ADDON",
             "PLAYER_REGEN_ENABLED",
             "COMBAT_LOG_EVENT_UNFILTERED"
       )
@@ -782,15 +781,10 @@ local function slashCommand(typed)
    else
       Flump.db.enabled = true
       Flump:RegisterEvents(
-            "RAID_ROSTER_UPDATE",
-            "PARTY_MEMBERS_CHANGED",
-            "CHAT_MSG_ADDON",
             "PLAYER_REGEN_ENABLED",
             "COMBAT_LOG_EVENT_UNFILTERED"
       )
-      Flump:ResetRaidInfo()
-      Flump:RAID_ROSTER_UPDATE()
-      Flump:PARTY_MEMBERS_CHANGED()
+      sendSync("Flump-Prio", Flump.Priority)
       print(status:format("|cff00ff00on|r"))
    end
 end
@@ -827,9 +821,9 @@ function Flump:ADDON_LOADED(addon)
    if debug then send("remember that debug mode is |cff00ff00ON|r.") end
 
    self:RegisterEvents(
-         "RAID_ROSTER_UPDATE",
-         "PARTY_MEMBERS_CHANGED",
-         "CHAT_MSG_ADDON"
+      "RAID_ROSTER_UPDATE",
+      "PARTY_MEMBERS_CHANGED",
+      "CHAT_MSG_ADDON"
    )
    if Flump.db.enabled then
       self:RegisterEvents(
