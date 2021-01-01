@@ -620,6 +620,8 @@ do
       else
          inRaid = false
          topPriority = true
+         for i,_ in pairs(raid) do raid[i] = nil end
+         raid = {}
       end
    end
 
@@ -666,6 +668,8 @@ do
       else
          inRaid = false
          topPriority = true
+         for i,_ in pairs(raid) do raid[i] = nil end
+         raid = {}
       end
    end
 
@@ -691,11 +695,6 @@ do
    function Flump:GetRaidUnitId(name)
       name = name or UnitName("player")
       return (raid[name] and raid[name].id) or "none"
-   end
-
-   function Flump:ResetRaidInfo()
-      inRaid = false
-      raid = {}
    end
 end
 
@@ -726,23 +725,31 @@ do
       for i, v in pairs(raid) do
          if v~=nil then table.insert(sortedTable, v) end
       end
-      if getTableLength(sortedTable) > 1 then table.sort(sortedTable, sortVersion) end
       print("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5Flump - Versions|r")
-      for i, v in ipairs(sortedTable) do
-         if v.version and v.priority then
-            print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s", v.name, v.version))
-         elseif v.version then
-            print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s (disabled)", v.name, v.version))
+      if getTableLength(sortedTable) > 1 then table.sort(sortedTable, sortVersion) end
+      if getTableLength(sortedTable) == 0 then
+         if Flump.Version and Flump.db.enabled then
+            print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s", UnitName("player"), Flump.Version))
          else
-            print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: Flump not installed", v.name))
+            print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s (disabled)", UnitName("player"), Flump.Version))
+         end
+      else
+         for i, v in ipairs(sortedTable) do
+            if v.version and v.priority then
+               print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s", v.name, v.version))
+            elseif v.version then
+               print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s (disabled)", v.name, v.version))
+            else
+               print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: Flump not installed", v.name))
+            end
+         end
+         for i = #sortedTable, 1, -1 do
+            if not sortedTable[i].version then
+               table.remove(sortedTable, i)
+            end
          end
       end
-      for i = #sortedTable, 1, -1 do
-         if not sortedTable[i].version then
-            table.remove(sortedTable, i)
-         end
-      end
-     print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5Found|r |cfff0a71f%s|r |cff39d7e5player%s with Flump|r",#sortedTable,(#sortedTable > 1 and "s" or "")))
+     print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5Found|r |cfff0a71f%s|r |cff39d7e5player%s with Flump|r",(#sortedTable > 1 and #sortedTable or 1),(#sortedTable > 1 and "s" or "")))
       for i = #sortedTable, 1, -1 do
          sortedTable[i] = nil
       end
