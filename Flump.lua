@@ -55,7 +55,7 @@ local raidOrdered = {}
 local UnitInBattleground, UnitInRaid, UnitInParty, UnitAffectingCombat, UnitName, UnitClass = UnitInBattleground, UnitInRaid, UnitInParty, UnitAffectingCombat, UnitName, UnitClass
 local UnitHealthMax, UnitManaMax, GetSpellLink, GetTime, GetRaidTargetIndex, format = UnitHealthMax, UnitManaMax, GetSpellLink, GetTime, GetRaidTargetIndex, string.format
 local SendChatMessage, SendAddonMessage, IsInInstance, GetRealNumRaidMembers, GetRealNumPartyMembers = SendChatMessage, SendAddonMessage, IsInInstance, GetRealNumRaidMembers, GetRealNumPartyMembers
-local UnitIsFeignDeath, GetNumRaidMembers, GetNumPartyMembers, GetRaidRosterInfo = UnitIsFeignDeath, GetNumRaidMembers, GetNumPartyMembers, GetRaidRosterInfo
+local UnitIsFeignDeath, UnitIsConnected, GetNumRaidMembers, GetNumPartyMembers, GetRaidRosterInfo = UnitIsFeignDeath, UnitIsConnected, GetNumRaidMembers, GetNumPartyMembers, GetRaidRosterInfo
 
 local debugSpell = {
    -- Paladin
@@ -193,8 +193,9 @@ local function say(msg)
 end
 
 local function tableHasThisEntry(table, entry)
-   if table==nil then send("table came nil inside function that check if table has a value, report this");return; end
-   if entry==nil then send("entry came nil inside function to check if table has a value, report this");return; end
+   assert(table~=nil, "bad argument #1: 'table' cannot be nil")
+   assert(type(table) == "table", "bad argument #1: 'table' needs to be a table; instead what came was " .. tostring(type(table)))
+   assert(entry~=nil, "bad argument #2: 'entry' cannot be nil")
 
    for _, value in ipairs(table) do
       if value == entry then
@@ -206,6 +207,7 @@ end
 
 local function getTableLength(table)
    table = table or {}
+   assert(type(table) == "table", "bad argument #1: 'table' needs to be a table; instead what came was " .. tostring(type(table)))
    local count = 0
    for _ in pairs(table) do count = count + 1 end
    return count
@@ -213,6 +215,8 @@ end
 
 -- automatically sends an addon message to the appropriate channel (BATTLEGROUND, RAID or PARTY)
 local function sendSync(prefix, msg)
+   assert(prefix~=nil, "bad argument #1: 'prefix' cannot be nil")
+   assert(type(prefix) == "string", "bad argument #1: 'prefix' needs to be a string; instead what came was " .. tostring(type(prefix)))
    local zoneType = select(2, IsInInstance())
    if zoneType == "pvp" or zoneType == "arena" then
       SendAddonMessage(prefix, msg, "BATTLEGROUND")
@@ -264,14 +268,17 @@ end
 
 -- Remove spaces on start and end of string
 local function trim(s)
+   if s==nil then return "" end
+   assert(type(s) == "string", "bad argument #1: 's' needs to be a string; instead what came was " .. tostring(type(s)))
    return string.match(s,'^()%s*$') and '' or string.match(s,'^%s*(.*%S)')
 end
 
 local function removeWords(myString, howMany)
-   assert(type(myString) == "string","bad argument: arg #1 needs to be a string; it came as a " .. tostring(type(myString)))
-   assert(type(howMany) == "number" and math.floor(howMany) == howMany,"bad argument: arg #2 needs to be an integer; it came as a " .. tostring(type(howMany)))
+   if (myString~=nil and howMany~=nil) then
+      assert(type(myString) == "string", "bad argument #1: 'myString' needs to be a string; instead what came was " .. tostring(type(myString)))
+      assert(type(howMany) == "number", "bad argument #2: 'howMany' needs to be a number; instead what came was " .. tostring(type(howMany)))
+      assert(math.floor(howMany) == howMany, "bad argument #2: 'howMany' needs to be an integer")
 
-   if (myString~=nil and howMany ~=nil) then
       for i=1, howMany do
          myString = string.gsub(myString,"^(%s*%a+)","",1)
       end
@@ -501,7 +508,12 @@ do
       local a = raid[a1]
       local b = raid[b2]
 
-      if not a or not b then return a~=nil end
+      if not a then return false end
+      if not b then return true end
+      if not a.name then return false end
+      if not b.name then return true end
+      if not UnitIsConnected(a.name) then return false end
+      if not UnitIsConnected(b.name) then return true end
 
       if a.priority and b.priority then
          if a.version and b.version and a.version~=b.version then return compareVersions(a.version,b.version) end
@@ -602,13 +614,12 @@ do
                raid[name].rank = rank
                raid[name].subgroup = subgroup
                raid[name].class = fileName
-               raid[name].online = online
                raid[name].id = "raid"..i
                if raid[name].priority~=nil and not online then raid[name].priority=nil end
                raid[name].updated = true
             end
          end
-         -- removing offline players
+         -- removing players that left pt
          for i, v in pairs(raid) do
             if not v.updated then
                raid[i] = nil
@@ -645,6 +656,7 @@ do
             if server and server ~= ""  then
                name = name.."-"..server
             end
+            local online = UnitIsConnected(name) and true or false
             raid[name] = raid[name] or {}
             raid[name].name = name
             if rank then
@@ -654,9 +666,10 @@ do
             end
             raid[name].class = fileName
             raid[name].id = id
+            if raid[name].priority~=nil and not online then raid[name].priority=nil end
             raid[name].updated = true
          end
-         -- removing offline players
+         -- removing players that left pt
          for i, v in pairs(raid) do
             if not v.updated then
                raid[i] = nil
@@ -735,13 +748,18 @@ do
          end
       else
          for i, v in ipairs(sortedTable) do
-            if v.version and v.priority then
-               print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s", v.name, v.version))
-            elseif v.version then
-               print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s (disabled)", v.name, v.version))
+            local msg
+            if v.version then
+               msg = format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s", v.name, v.version)
+               if v.priority and UnitIsConnected(v.name) then
+                  msg = msg .. " (disabled)"
+               elseif not UnitIsConnected(v.name) then
+                  msg = msg .. " (offline)"
+               end
             else
-               print(format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: Flump not installed", v.name))
+               msg = format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: Flump not installed", v.name)
             end
+            print(msg)
          end
          for i = #sortedTable, 1, -1 do
             if not sortedTable[i].version then
@@ -759,7 +777,7 @@ end
 local function slashCommand(typed)
    local cmd = string.match(typed,"^(%w+)") -- Gets the first word the user has typed
    if cmd~=nil then cmd = cmd:lower() end   -- And makes it lower case
-   local extra = removeWords(typed,1)
+   local extra = removeWords(typed, 1)
    if(cmd=="debug") then
       debug = not debug
       Flump.db.debug = debug
@@ -774,8 +792,8 @@ local function slashCommand(typed)
       end
    elseif (cmd=="ver" or cmd=="version") then
       Flump:ShowVersions()
-   elseif (cmd=="priotable" or cmd=="pt") and debug then
-      send("Table of priorities")
+   elseif (cmd=="priotable" or cmd=="pt" or cmd=="tp") and debug then
+      send("Table of priorities (TP)")
       for i,n in ipairs(raidOrdered) do send(format("%s. %s (%s - %s)",i,n,(raid[n].priority or 0),(raid[n].version or 0))) end
    elseif Flump.db.enabled then
       Flump.db.enabled = false
@@ -793,6 +811,8 @@ local function slashCommand(typed)
       )
       sendSync("Flump-Prio", Flump.Priority)
       print(status:format("|cff00ff00on|r"))
+      Flump:RAID_ROSTER_UPDATE()
+      Flump:PARTY_MEMBERS_CHANGED()
    end
 end
 
