@@ -709,6 +709,14 @@ do
       name = name or UnitName("player")
       return (raid[name] and raid[name].id) or "none"
    end
+
+   function Flump:ResetRaid()
+      for i, v in pairs(raid) do
+         raid[i] = nil
+      end
+      raid = {}
+      inRaid = false
+   end
 end
 
 function Flump:PLAYER_REGEN_ENABLED()
@@ -751,7 +759,7 @@ do
             local msg
             if v.version then
                msg = format("|cff2d61e3<|r|cff4da6ebFlump|r|cff2d61e3>|r |cff39d7e5%s|r: %s", v.name, v.version)
-               if v.priority and UnitIsConnected(v.name) then
+               if not v.priority and UnitIsConnected(v.name) then
                   msg = msg .. " (disabled)"
                elseif not UnitIsConnected(v.name) then
                   msg = msg .. " (offline)"
@@ -809,10 +817,10 @@ local function slashCommand(typed)
             "PLAYER_REGEN_ENABLED",
             "COMBAT_LOG_EVENT_UNFILTERED"
       )
-      sendSync("Flump-Prio", Flump.Priority)
-      print(status:format("|cff00ff00on|r"))
+      Flump:ResetRaid()
       Flump:RAID_ROSTER_UPDATE()
       Flump:PARTY_MEMBERS_CHANGED()
+      print(status:format("|cff00ff00on|r"))
    end
 end
 
