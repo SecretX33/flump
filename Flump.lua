@@ -749,6 +749,8 @@ do
       if not v2 then return true end
       if not v1.version then return false end
       if not v2.version then return true end
+      if not v1.priority then return false end
+	  if not v2.priority then return true end
 
       local a = splitVersion(v1.version,".")
       local b = splitVersion(v2.version,".")
@@ -758,7 +760,7 @@ do
          if not a[i] or not b[i] then return a[i]~=nil end
          if a[i]~=b[i] then return a[i] > b[i] end
       end
-      return true
+      return false
    end
 
    function Flump:ShowVersions()
