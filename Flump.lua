@@ -289,9 +289,26 @@ end
 -- end of [string utils]
 
 do
+   local holyWrathCasts = {}
+
    local function icon(name)
       local n = GetRaidTargetIndex(name)
       return n and format("{rt%d}", n) or ""
+   end
+
+   local function canHolyWrathBeAnnounced(srcName, destName)
+      if not srcName or destName~="Val'kyr Shadowguard" then return false end
+
+      -- [Name] = Time
+      for i, v in pairs(holyWrathCasts) do
+         if(i == srcName) then
+            if holyWrathCasts[i]~=nil and tonumber(holyWrathCasts[i]) and GetTime() < (tonumber(holyWrathCasts[i]) + 2) then
+               return false
+            end
+         end
+      end
+      holyWrathCasts[srcName] = GetTime()
+      return true
    end
 
    function Flump:COMBAT_LOG_EVENT_UNFILTERED(timestamp, event, srcGUID, srcName, srcFlags, destGUID, destName, destFlags, spellID, spellName, school, ...)
@@ -365,9 +382,7 @@ do
 
       if UnitAffectingCombat(srcName) then -- If the caster is in combat
          if event == "SPELL_CAST_SUCCESS" then
-            if spellID == HOLY_WRATH then
-               queueSend(castnt:format(icon(srcName), srcName, GetSpellLink(spellID)))
-            elseif spells[spellID] then
+            if spells[spellID] then
                queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- [X] cast [Y] on [Z]
             elseif spellID == 19752 then -- Don't want to announce when it fades, so
                queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName)) -- Divine Intervention
@@ -432,6 +447,11 @@ do
             queueSend(bot:format(icon(srcName), srcName, GetSpellLink(spellID)))   -- [X] used a [Y] -- Bots
          elseif rituals[spellID] then
             queueSend(create:format(icon(srcName), srcName, GetSpellLink(spellID))) -- [X] is creating a [Z] -- Rituals
+         end
+
+      elseif event == "SPELL_DAMAGE" then
+         if spellID == HOLY_WRATH and destName~=nil and canHolyWrathBeAnnounced(srcName, destName) then
+            queueSend(cast:format(icon(srcName), srcName, GetSpellLink(spellID), icon(destName), destName))
          end
 
       elseif event == "SPELL_AURA_APPLIED" then -- Check name instead of ID to save checking all ranks
