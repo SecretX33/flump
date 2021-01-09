@@ -1,7 +1,7 @@
 local Flump = CreateFrame("frame")
 
-local ENABLE_IN_RAID     = true         -- enable in raid
-local ENABLE_IN_DUNGEONS = true     -- enable in dungeons
+local ENABLE_IN_RAID     = true      -- enable in raid
+local ENABLE_IN_DUNGEONS = true      -- enable in dungeons
 local MIN_TANK_HP        = 55000     -- How much health must a player have to be considered a tank?
 local MIN_HEALER_MANA    = 20000     -- How much mana must a player have to be considered a healer?
 local DIVINE_PLEA        = false     -- Announce when (holy) Paladins cast Divine Plea? (-50% healing)
@@ -54,7 +54,7 @@ local raidOrdered = {}
 
 -- Upvalues
 local UnitInBattleground, UnitInRaid, UnitInParty, UnitAffectingCombat, UnitName, UnitClass = UnitInBattleground, UnitInRaid, UnitInParty, UnitAffectingCombat, UnitName, UnitClass
-local UnitHealthMax, UnitManaMax, GetSpellLink, GetTime, GetRaidTargetIndex, format = UnitHealthMax, UnitManaMax, GetSpellLink, GetTime, GetRaidTargetIndex, string.format
+local UnitHealthMax, UnitManaMax, GetSpellLink, GetTime, GetRaidTargetIndex, wipe, format = UnitHealthMax, UnitManaMax, GetSpellLink, GetTime, GetRaidTargetIndex, wipe, string.format
 local SendChatMessage, SendAddonMessage, IsInInstance, GetRealNumRaidMembers, GetRealNumPartyMembers = SendChatMessage, SendAddonMessage, IsInInstance, GetRealNumRaidMembers, GetRealNumPartyMembers
 local UnitIsFeignDeath, UnitIsConnected, GetNumRaidMembers, GetNumPartyMembers, GetRaidRosterInfo = UnitIsFeignDeath, UnitIsConnected, GetNumRaidMembers, GetNumPartyMembers, GetRaidRosterInfo
 
@@ -764,7 +764,8 @@ do
 end
 
 function Flump:PLAYER_REGEN_ENABLED()
-   playersUnableToSpeak = {}
+   wipe(playersUnableToSpeak)
+   wipe(timeMessagesSent)
 end
 
 function Flump:IsPlayerInsideValidInstance()
@@ -792,7 +793,7 @@ function Flump:RegisterAddonEvents()
          if debug then send("Reinforming people about your priority if you nulled it when your events got unregistered") end
          sendSync("Flump-Prio", Flump.Priority)
       end
-      -- But if you have debug on, this function will be called regardless of whenever you are inside the instance or not, so this prevents dead players with debug on from stealing place of those who can actually speak
+   -- But if you have debug on, this function will be called regardless of whenever you are inside the instance or not, so this prevents dead players with debug on from stealing place of those who can actually speak
    elseif UnitHealth("player") <= 1 then
       sendSync("Flump-Prio", nil)
    end
