@@ -812,6 +812,7 @@ function Flump:UnregisterAddonEvents()
    )
    -- If the player debug mode is off, or if he is dead/ghost, then send nil as priority when unregistering the events to tell other people that this player cannot speak
    if not debug or UnitHealth("player") <= 1 then sendSync("Flump-Prio", nil) end
+   wipe(timeMessagesSent)
 end
 
 function Flump:CheckEnable()
