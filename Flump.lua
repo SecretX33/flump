@@ -11,7 +11,7 @@ local maxMessagesSent             = 3   -- Max messages that can be send at once
 local gracePeriodForSendMessages  = 1.3   -- Assuming that we can send at most 'maxMessagesSent' every 'gracePeriodForSendMessages' seconds
 -- Chat Variables
 local timeMessagesSent            = {}
-local queuedMessages
+local queuedMessages              = {}
 local MAX_PRIORITY = 1000000
 local playersUnableToSpeak        = {}
 
@@ -247,7 +247,7 @@ end
 -- Frame update handler
 local function onUpdate(this)
    if not Flump.db.enabled then return end
-   if not queuedMessages then
+   if #queuedMessages == 0 then
       this:SetScript("OnUpdate", nil)
       return
    end
@@ -256,12 +256,10 @@ local function onUpdate(this)
    table.insert(timeMessagesSent, GetTime())
    say(queuedMessages[1])
    table.remove(queuedMessages,1)
-   if getTableLength(queuedMessages)==0 then queuedMessages = nil end
 end
 
 local function queueMsg(msg)
    if(msg~=nil) then
-      queuedMessages = queuedMessages or {}
       table.insert(queuedMessages,msg)
       Flump:SetScript("OnUpdate", onUpdate)
    end
