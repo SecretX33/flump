@@ -893,7 +893,7 @@ end
 ----------------------
 do
    local function showHelp()
-      send("Please use one of the following: on, off, toggle, version.")
+      send("Please use one of the following: on, off, toggle (t), version.")
    end
 
    local function toggleAddon(state)
@@ -955,7 +955,7 @@ do
       if extra~=nil then extra = extra:lower() end
 
       if(cmd=="help" or cmd=="?" or cmd=="" or cmd==nil) then showHelp()
-      elseif (cmd=="toggle") then toggleAddon()
+      elseif (cmd=="toggle" or cmd=="t") then toggleAddon()
       elseif (cmd=="on" or cmd=="enable") then toggleAddon(true)
       elseif (cmd=="off" or cmd=="disable") then toggleAddon(false)
       elseif (cmd=="prio" or cmd=="priority" or cmd=="p") then showPriority()
